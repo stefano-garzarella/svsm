@@ -21,6 +21,7 @@ pub mod kernel_launch;
 pub mod locking;
 pub mod mm;
 pub mod protocols;
+pub mod proxy;
 pub mod requests;
 pub mod serial;
 pub mod sev;
