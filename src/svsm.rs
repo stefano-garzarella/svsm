@@ -38,6 +38,7 @@ use svsm::mm::memory::init_memory_map;
 use svsm::mm::pagetable::paging_init;
 use svsm::mm::virtualrange::virt_log_usage;
 use svsm::mm::{init_kernel_mapping_info, PerCPUPageMappingGuard};
+use svsm::proxy::{Proxy, Write};
 use svsm::requests::{request_loop, update_mappings};
 use svsm::serial::SerialPort;
 use svsm::serial::SERIAL_PORT;
@@ -310,6 +311,19 @@ fn mapping_info_init(launch_info: &KernelLaunchInfo) {
     );
 }
 
+fn proxy_test() {
+    static PROXY_IO: SVSMIOPort = SVSMIOPort::new();
+    let mut sp: SerialPort = SerialPort {
+        driver: &PROXY_IO,
+        port: 0x3e8, //COM3
+    };
+
+    sp.init();
+
+    let mut proxy = Proxy::new(&mut sp);
+    proxy.write("ciaooo".as_bytes()).unwrap();
+}
+
 #[no_mangle]
 pub extern "C" fn svsm_start(li: &KernelLaunchInfo, vb_addr: usize) {
     let launch_info: KernelLaunchInfo = *li;
@@ -465,6 +479,8 @@ pub extern "C" fn svsm_main() {
     prepare_fw_launch(&fw_meta).expect("Failed to setup guest VMSA");
 
     virt_log_usage();
+
+    proxy_test();
 
     if let Err(e) = launch_fw() {
         panic!("Failed to launch FW: {:#?}", e);
