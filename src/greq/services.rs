@@ -21,6 +21,73 @@ use core::mem::size_of;
 const REPORT_REQUEST_SIZE: usize = size_of::<SnpReportRequest>();
 const REPORT_RESPONSE_SIZE: usize = size_of::<SnpReportResponse>();
 
+pub fn test_get_regular_report() {
+    use crate::{
+        mm::alloc::{allocate_zeroed_page, free_page},
+        types::PAGE_SIZE,
+    };
+    use core::slice::from_raw_parts_mut;
+
+    let vaddr = allocate_zeroed_page().unwrap();
+    let buffer = unsafe { from_raw_parts_mut(vaddr.as_mut_ptr::<u8>(), PAGE_SIZE) };
+
+    buffer[0] = 0x31;
+    buffer[1] = 0x32;
+    buffer[2] = 0x33;
+    buffer[3] = 0x34;
+
+    match get_regular_report(buffer) {
+        Ok(response_len) => {
+            assert_eq!(response_len, REPORT_RESPONSE_SIZE);
+
+            let response = SnpReportResponse::try_from_as_ref(buffer).unwrap();
+            log::info!("Report: {:02x?}", response);
+        }
+        Err(e) => {
+            panic!("get_regular_report() failed, e={e:?}");
+        }
+    };
+    free_page(vaddr);
+}
+
+pub fn test_get_extended_report() {
+    use crate::{
+        mm::alloc::{allocate_pages, allocate_zeroed_page, free_page, get_order},
+        types::PAGE_SIZE,
+    };
+    use core::slice::from_raw_parts_mut;
+
+    let buffer_va = allocate_zeroed_page().unwrap();
+    let buffer = unsafe { from_raw_parts_mut(buffer_va.as_mut_ptr(), PAGE_SIZE) };
+
+    buffer[0] = 0x35;
+    buffer[1] = 0x36;
+    buffer[2] = 0x37;
+    buffer[3] = 0x38;
+
+    const CERTS_SIZE: usize = 3 * PAGE_SIZE;
+
+    let certs_va = allocate_pages(get_order(CERTS_SIZE)).unwrap();
+    let certs = unsafe { from_raw_parts_mut(certs_va.as_mut_ptr(), CERTS_SIZE) };
+    certs.fill(0);
+
+    match get_extended_report(buffer, certs) {
+        Ok(response_len) => {
+            assert_eq!(response_len, REPORT_RESPONSE_SIZE);
+
+            let response = SnpReportResponse::try_from_as_ref(buffer).unwrap();
+
+            log::info!("Extended report: {:02x?}", response);
+            log::info!("Certificates sample: {:02x?}", &certs[0..100]);
+        }
+        Err(e) => {
+            panic!("get_extended_report() failed, e={e:?}");
+        }
+    };
+    free_page(certs_va);
+    free_page(buffer_va);
+}
+
 fn get_report(buffer: &mut [u8], certs: Option<&mut [u8]>) -> Result<usize, SvsmReqError> {
     let request: &SnpReportRequest = SnpReportRequest::try_from_as_ref(buffer)?;
     // Non-VMPL0 attestation reports can be requested by the guest kernel

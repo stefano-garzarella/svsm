@@ -474,6 +474,13 @@ pub extern "C" fn svsm_main() {
 
     guest_request_driver_init();
 
+    use svsm::greq::services::test_get_extended_report;
+    use svsm::greq::services::test_get_regular_report;
+    test_get_regular_report();
+    test_get_extended_report();
+    test_get_regular_report();
+    test_get_extended_report();
+
     prepare_fw_launch(&fw_meta).expect("Failed to setup guest VMSA");
 
     virt_log_usage();
