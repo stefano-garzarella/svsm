@@ -12,6 +12,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 use svsm::fw_meta::{parse_fw_meta_data, print_fw_meta, validate_fw_memory, SevFWMetaData};
 
+use alloc::format;
 use core::arch::{asm, global_asm};
 use core::panic::PanicInfo;
 use core::slice;
@@ -474,12 +475,24 @@ pub extern "C" fn svsm_main() {
 
     guest_request_driver_init();
 
-    use svsm::greq::services::test_get_extended_report;
-    use svsm::greq::services::test_get_regular_report;
-    test_get_regular_report();
-    test_get_extended_report();
-    test_get_regular_report();
-    test_get_extended_report();
+    use svsm::greq::services::get_report_ex;
+
+    log::info!("Getting report");
+    let res = get_report_ex(&[0u8;64]);
+    match res {
+        Ok((report, certs)) => {
+
+            log::info!("Got a report: {:02x?}", &report);
+            log::info!("Got Certs {:02x?}", &certs[..64]);
+
+            let measurement_string = report
+                .measurement
+                .map(|v| format!("{v:02x}"))
+                .join("");
+            log::info!("SNP Launch Measurement: {measurement_string}");
+        },
+        Err(e) => log::info!("Error getting attestation report: {e:?}"),
+    }
 
     prepare_fw_launch(&fw_meta).expect("Failed to setup guest VMSA");
 
