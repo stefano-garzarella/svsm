@@ -14,6 +14,7 @@ pub mod stack;
 pub mod validate;
 pub mod virtualrange;
 pub mod vm;
+pub mod page_memory;
 
 pub use address_space::*;
 pub use guestmem::GuestPtr;
