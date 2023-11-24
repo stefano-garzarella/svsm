@@ -34,6 +34,7 @@ use svsm::error::SvsmError;
 use svsm::fs::{initialize_fs, populate_ram_fs};
 use svsm::fw_cfg::FwCfg;
 use svsm::greq::driver::guest_request_driver_init;
+use svsm::kbc;
 use svsm::kernel_launch::KernelLaunchInfo;
 use svsm::mm::alloc::{memory_info, print_memory_info, root_mem_init};
 use svsm::mm::memory::init_memory_map;
@@ -488,6 +489,11 @@ pub extern "C" fn svsm_main() {
             log::info!("SNP Launch Measurement: {measurement_string}");
         }
         Err(e) => log::info!("Error getting attestation report: {e:?}"),
+    }
+
+    match kbc::get_secret("svsm") {
+        Ok(secret) => log::info!("Got the secret: {secret}"),
+        Err(e) => log::info!("Error doing remote attestation: {e:?}"),
     }
 
     prepare_fw_launch(&fw_meta).expect("Failed to setup guest VMSA");
