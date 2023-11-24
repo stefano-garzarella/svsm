@@ -114,6 +114,7 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
             "Attestation failed - status({0}) - {1}",
             resp.status, resp.body
         );
+        return Err(Error::AutenticationFailed);
     }
 
     let req = Request {
@@ -124,16 +125,22 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
     proxy.write_json(&json!(req)).unwrap();
     let data = proxy.read_json().unwrap();
     let resp: Response = serde_json::from_value(data).unwrap();
-    if resp.is_success() {
+    let ciphertext = if resp.is_success() {
         info!("Key successfully received: {0}", resp.body);
+        resp.body
     } else {
         error!(
             "Key request failed - status({0}) - {1}",
             resp.status, resp.body
         );
-    }
+        return Err(Error::AutenticationFailed);
+    };
 
-    Ok("".to_string())
+    let secret = priv_key
+        .decrypt(rsa::Pkcs1v15Encrypt, &ciphertext.into_bytes())
+        .unwrap();
+
+    Ok(String::from_utf8(secret).unwrap())
 }
 
 impl<'a> Write for SerialPort<'a> {
