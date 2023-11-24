@@ -136,9 +136,7 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
         return Err(Error::AutenticationFailed);
     };
 
-    // Use cs.secret()
-    let ciphertext = hex::decode(ciphertext_encoded).unwrap();
-
+    let ciphertext = cs.secret(ciphertext_encoded).unwrap();
     let secret = priv_key.decrypt(rsa::Pkcs1v15Encrypt, &ciphertext).unwrap();
 
     Ok(String::from_utf8(secret).unwrap())
