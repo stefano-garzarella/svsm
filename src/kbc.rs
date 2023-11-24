@@ -117,7 +117,7 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
     }
 
     let req = Request {
-        endpoint: "/kbs/v0/key".to_string() + workload_id,
+        endpoint: "/kbs/v0/key/".to_string() + workload_id,
         method: HttpMethod::GET,
         body: json!(""),
     };
