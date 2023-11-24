@@ -108,9 +108,29 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
     let data = proxy.read_json().unwrap();
     let resp: Response = serde_json::from_value(data).unwrap();
     if resp.is_success() {
-        info!("Attestation success - {}", resp.body)
+        info!("Attestation success");
     } else {
-        error!("Attestation error({0}) - {1}", resp.status, resp.body)
+        error!(
+            "Attestation failed - status({0}) - {1}",
+            resp.status, resp.body
+        );
+    }
+
+    let req = Request {
+        endpoint: "/kbs/v0/key".to_string() + workload_id,
+        method: HttpMethod::GET,
+        body: json!(""),
+    };
+    proxy.write_json(&json!(req)).unwrap();
+    let data = proxy.read_json().unwrap();
+    let resp: Response = serde_json::from_value(data).unwrap();
+    if resp.is_success() {
+        info!("Key successfully received: {0}", resp.body);
+    } else {
+        error!(
+            "Key request failed - status({0}) - {1}",
+            resp.status, resp.body
+        );
     }
 
     Ok("".to_string())
