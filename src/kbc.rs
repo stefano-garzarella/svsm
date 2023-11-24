@@ -125,7 +125,7 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
     proxy.write_json(&json!(req)).unwrap();
     let data = proxy.read_json().unwrap();
     let resp: Response = serde_json::from_value(data).unwrap();
-    let ciphertext = if resp.is_success() {
+    let ciphertext_encoded = if resp.is_success() {
         info!("Key successfully received: {0}", resp.body);
         resp.body
     } else {
@@ -136,9 +136,10 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
         return Err(Error::AutenticationFailed);
     };
 
-    let secret = priv_key
-        .decrypt(rsa::Pkcs1v15Encrypt, &ciphertext.into_bytes())
-        .unwrap();
+    // Use cs.secret()
+    let ciphertext = hex::decode(ciphertext_encoded).unwrap();
+
+    let secret = priv_key.decrypt(rsa::Pkcs1v15Encrypt, &ciphertext).unwrap();
 
     Ok(String::from_utf8(secret).unwrap())
 }

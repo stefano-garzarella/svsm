@@ -557,6 +557,7 @@ dependencies = [
  "bitflags 2.4.1",
  "gdbstub",
  "gdbstub_arch",
+ "hex",
  "intrusive-collections",
  "log",
  "packit",
