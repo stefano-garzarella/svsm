@@ -79,10 +79,13 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
 
     info!("Nonce: {}", nonce);
 
+    let key_n_encoded = ClientSession::encode_key(pub_key.n()).unwrap();
+    let key_e_encoded = ClientSession::encode_key(pub_key.e()).unwrap();
+
     let mut hasher = Sha512::new();
     hasher.update(nonce.as_bytes());
-    hasher.update(pub_key.n().to_string().as_bytes());
-    hasher.update(pub_key.e().to_string().as_bytes());
+    hasher.update(key_n_encoded.as_bytes());
+    hasher.update(key_e_encoded.as_bytes());
 
     let res = get_report_ex(&hasher.finalize().into()).unwrap();
     let attestation = res.0;
@@ -94,7 +97,7 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
         )
     });
 
-    let attestation = cs.attestation(pub_key.n(), pub_key.e(), &snp).unwrap();
+    let attestation = cs.attestation(key_n_encoded, key_e_encoded, &snp).unwrap();
 
     let req = Request {
         endpoint: "/kbs/v0/attest".to_string(),

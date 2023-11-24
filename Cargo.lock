@@ -432,9 +432,10 @@ checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 [[package]]
 name = "reference-kbc"
 version = "0.1.0"
-source = "git+https://github.com/stefano-garzarella/reference-kbc#d4659445ec45ffa75b2cc41fce57c1d436181fed"
+source = "git+https://github.com/stefano-garzarella/reference-kbc#d5b3e1a575f06e665a5bc7c5ed707c471201aef3"
 dependencies = [
  "anyhow",
+ "base64ct",
  "hex",
  "kbs-types",
  "num-bigint-dig",
