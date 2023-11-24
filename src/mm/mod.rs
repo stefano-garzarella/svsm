@@ -8,13 +8,13 @@ pub mod address_space;
 pub mod alloc;
 pub mod guestmem;
 pub mod memory;
+pub mod page_memory;
 pub mod pagetable;
 pub mod ptguards;
 pub mod stack;
 pub mod validate;
 pub mod virtualrange;
 pub mod vm;
-pub mod page_memory;
 
 pub use address_space::*;
 pub use guestmem::GuestPtr;

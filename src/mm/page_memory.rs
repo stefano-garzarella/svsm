@@ -1,4 +1,3 @@
-
 pub struct PageMemory {
     addr: crate::address::VirtAddr,
     size: usize,
@@ -47,4 +46,3 @@ impl DerefMut for PageMemory {
         unsafe { core::slice::from_raw_parts_mut(self.addr.as_mut_ptr::<u8>(), self.size) }
     }
 }
-

@@ -16,7 +16,8 @@ use crate::{
         msg::SnpGuestRequestMsgType,
         pld_report::{SnpReportRequest, SnpReportResponse},
     },
-    protocols::errors::SvsmReqError, mm::page_memory::PageMemory,
+    mm::page_memory::PageMemory,
+    protocols::errors::SvsmReqError,
 };
 use core::mem::size_of;
 
@@ -189,11 +190,13 @@ const fn max(a: usize, b: usize) -> usize {
     [a, b][(a < b) as usize]
 }
 
-pub type ReportUserData = [u8;64];
+pub type ReportUserData = [u8; 64];
 
-pub fn get_report_ex(user_data: &ReportUserData) -> Result<(Box<AttestationReport>, PageMemory), ReportError> {
-
-    let mut request_buffer = PageMemory::new_zeroed(max(user_data.len(), size_of::<SnpReportResponse>()));
+pub fn get_report_ex(
+    user_data: &ReportUserData,
+) -> Result<(Box<AttestationReport>, PageMemory), ReportError> {
+    let mut request_buffer =
+        PageMemory::new_zeroed(max(user_data.len(), size_of::<SnpReportResponse>()));
     request_buffer[..user_data.len()].clone_from_slice(user_data);
 
     let mut cert_buffer = PageMemory::new_zeroed(3 * crate::mm::PAGE_SIZE);
@@ -201,8 +204,8 @@ pub fn get_report_ex(user_data: &ReportUserData) -> Result<(Box<AttestationRepor
     match get_report(&mut request_buffer, Some(&mut cert_buffer)) {
         Ok(REPORT_RESPONSE_SIZE) => {
             let response = SnpReportResponse::try_from_as_ref(&request_buffer).unwrap();
-            Ok((Box::new(response.report),cert_buffer))
-        },
+            Ok((Box::new(response.report), cert_buffer))
+        }
         Ok(wrong_size) => Err(ReportError::InvalidResponseSize(wrong_size)),
         Err(e) => Err(ReportError::RequestError(e)),
     }
