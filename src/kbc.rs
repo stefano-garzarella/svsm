@@ -45,7 +45,8 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
 
     let mut proxy = Proxy::new(Box::new(sp));
 
-    let mut rng = rand_chacha::ChaChaRng::from_rng(RdSeed::new().unwrap()).unwrap();
+    let rdrand = unsafe { RdSeed::new_unchecked() };
+    let mut rng = rand_chacha::ChaChaRng::from_rng(rdrand).unwrap();
     let priv_key = RsaPrivateKey::new(&mut rng, 2048).expect("failed to generate a key");
     let pub_key = RsaPublicKey::from(&priv_key);
 
