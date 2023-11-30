@@ -10,6 +10,7 @@ use alloc::{
     boxed::Box,
     string::{String, ToString},
 };
+use getrandom::getrandom;
 use log::{debug, error, info};
 use rand_chacha::rand_core::SeedableRng;
 use reference_kbc::{
@@ -37,15 +38,19 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
     static PROXY_IO: SVSMIOPort = SVSMIOPort::new();
     let sp: SerialPort = SerialPort {
         driver: &PROXY_IO,
-        port: 0x3e8, //COM3)
+        port: 0x3e8, //COM3
     };
 
     sp.init();
 
     let mut proxy = Proxy::new(Box::new(sp));
 
-    // TODO: get entrophy for the seed
-    let mut rng = rand_chacha::ChaChaRng::from_seed([0; 32]);
+    let mut seed = [0u8; 32];
+    getrandom(&mut seed).unwrap();
+
+    debug!("Random seed generated: {:#?}", seed);
+
+    let mut rng = rand_chacha::ChaChaRng::from_seed(seed);
     let priv_key = RsaPrivateKey::new(&mut rng, 2048).expect("failed to generate a key");
     let pub_key = RsaPublicKey::from(&priv_key);
 
@@ -64,20 +69,20 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
     let resp: Response = serde_json::from_value(data).unwrap();
 
     let challenge = if resp.is_success() {
-        let challenge = resp.body;
-        info!("Authentication success - {}", challenge);
-        challenge
+        resp.body
     } else {
-        error!("Authentication error({0}) - {1}", resp.status, resp.body);
+        error!(
+            "Authentication failed - status({0}) - {1}",
+            resp.status, resp.body
+        );
         return Err(Error::AutenticationFailed);
     };
 
-    debug!("Challenge: {:#?}", challenge);
     let nonce = cs
         .challenge(serde_json::from_str(&challenge).unwrap())
         .unwrap();
 
-    info!("Nonce: {}", nonce);
+    info!("Authentication done - nonce: {}", nonce);
 
     let key_n_encoded = ClientSession::encode_key(pub_key.n()).unwrap();
     let key_e_encoded = ClientSession::encode_key(pub_key.e()).unwrap();
@@ -107,15 +112,15 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
     proxy.write_json(&json!(req)).unwrap();
     let data = proxy.read_json().unwrap();
     let resp: Response = serde_json::from_value(data).unwrap();
-    if resp.is_success() {
-        info!("Attestation success");
-    } else {
+    if !resp.is_success() {
         error!(
             "Attestation failed - status({0}) - {1}",
             resp.status, resp.body
         );
         return Err(Error::AutenticationFailed);
     }
+
+    info!("Attestation done");
 
     let req = Request {
         endpoint: "/kbs/v0/key/".to_string() + workload_id,
@@ -126,7 +131,7 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
     let data = proxy.read_json().unwrap();
     let resp: Response = serde_json::from_value(data).unwrap();
     let ciphertext_encoded = if resp.is_success() {
-        info!("Key successfully received: {0}", resp.body);
+        debug!("Key (encrypted) received: {0}", resp.body);
         resp.body
     } else {
         error!(
@@ -136,8 +141,12 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
         return Err(Error::AutenticationFailed);
     };
 
+    info!("Key successfully received");
+
     let ciphertext = cs.secret(ciphertext_encoded).unwrap();
     let secret = priv_key.decrypt(rsa::Pkcs1v15Encrypt, &ciphertext).unwrap();
+
+    info!("Key successfully decrypted");
 
     Ok(String::from_utf8(secret).unwrap())
 }
