@@ -10,9 +10,9 @@ use alloc::{
     boxed::Box,
     string::{String, ToString},
 };
-use getrandom::getrandom;
 use log::{debug, error, info};
 use rand_chacha::rand_core::SeedableRng;
+use rdrand::RdSeed;
 use reference_kbc::{
     client_proxy::{
         Connection, Error as CPError, HttpMethod, Proxy, Read, Request, Response, Write,
@@ -45,12 +45,7 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
 
     let mut proxy = Proxy::new(Box::new(sp));
 
-    let mut seed = [0u8; 32];
-    getrandom(&mut seed).unwrap();
-
-    debug!("Random seed generated: {:#?}", seed);
-
-    let mut rng = rand_chacha::ChaChaRng::from_seed(seed);
+    let mut rng = rand_chacha::ChaChaRng::from_rng(RdSeed::new().unwrap()).unwrap();
     let priv_key = RsaPrivateKey::new(&mut rng, 2048).expect("failed to generate a key");
     let pub_key = RsaPublicKey::from(&priv_key);
 
