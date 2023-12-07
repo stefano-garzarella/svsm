@@ -230,7 +230,7 @@ checksum = "af150ab688ff2122fcef229be89cb50dd66af9e01a4ff320cc137eecc9bacc38"
 [[package]]
 name = "kbs-types"
 version = "0.4.0"
-source = "git+https://github.com/virtee/kbs-types#90b13bb023c5805d82cc3206fab9c8e57f61746f"
+source = "git+https://github.com/tylerfanelli/kbs-types?branch=snp_mods#80b207b5dd0a9754e59a0a81a2a3625a55ca3f6d"
 dependencies = [
  "serde",
  "serde_json",
@@ -440,7 +440,7 @@ dependencies = [
 [[package]]
 name = "reference-kbc"
 version = "0.1.0"
-source = "git+https://github.com/stefano-garzarella/reference-kbc#8bf78559147907f500953a08af2b77a4945f1e53"
+source = "git+https://github.com/tylerfanelli/reference-kbc?branch=keybroker#c6d4e199d086463dd5cfd2238d31a416249536a9"
 dependencies = [
  "anyhow",
  "base64ct",

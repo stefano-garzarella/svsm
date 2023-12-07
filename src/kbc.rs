@@ -34,7 +34,7 @@ pub enum Error {
     AutenticationFailed,
 }
 
-pub fn get_secret(workload_id: &str) -> Result<String, Error> {
+pub fn get_secret() -> Result<String, Error> {
     static PROXY_IO: SVSMIOPort = SVSMIOPort::new();
     let sp: SerialPort = SerialPort {
         driver: &PROXY_IO,
@@ -50,7 +50,7 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
     let priv_key = RsaPrivateKey::new(&mut rng, 2048).expect("failed to generate a key");
     let pub_key = RsaPublicKey::from(&priv_key);
 
-    let mut snp = ClientTeeSnp::new(SnpGeneration::Milan, workload_id.to_string());
+    let mut snp = ClientTeeSnp::new(SnpGeneration::Milan);
     let mut cs = ClientSession::new();
 
     let request = cs.request(&snp).unwrap();
@@ -119,7 +119,7 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
     info!("Attestation done");
 
     let req = Request {
-        endpoint: "/kbs/v0/key/".to_string() + workload_id,
+        endpoint: "/kbs/v0/resource".to_string(),
         method: HttpMethod::GET,
         body: json!(""),
     };

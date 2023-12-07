@@ -491,7 +491,7 @@ pub extern "C" fn svsm_main() {
         Err(e) => log::info!("Error getting attestation report: {e:?}"),
     }
 
-    match kbc::get_secret("svsm") {
+    match kbc::get_secret() {
         Ok(secret) => log::info!("Got the secret: {secret}"),
         Err(e) => log::info!("Error doing remote attestation: {e:?}"),
     }
