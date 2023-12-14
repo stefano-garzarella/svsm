@@ -17,7 +17,8 @@ use reference_kbc::{
     client_proxy::{
         Connection, Error as CPError, HttpMethod, Proxy, Read, Request, Response, Write,
     },
-    client_session::{ClientSession, ClientTeeSnp, SnpGeneration},
+    client_session::ClientSession,
+    clients::{reference_kbs::ReferenceKBSClientSnp, SnpGeneration},
 };
 use rsa::{traits::PublicKeyParts, RsaPrivateKey, RsaPublicKey};
 use serde_json::json;
@@ -50,7 +51,7 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
     let priv_key = RsaPrivateKey::new(&mut rng, 2048).expect("failed to generate a key");
     let pub_key = RsaPublicKey::from(&priv_key);
 
-    let mut snp = ClientTeeSnp::new(SnpGeneration::Milan, workload_id.to_string());
+    let mut snp = ReferenceKBSClientSnp::new(SnpGeneration::Milan, workload_id.to_string());
     let mut cs = ClientSession::new();
 
     let request = cs.request(&snp).unwrap();
@@ -139,7 +140,7 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
 
     info!("Key successfully received");
 
-    let ciphertext = cs.secret(ciphertext_encoded).unwrap();
+    let ciphertext = cs.secret(ciphertext_encoded, &snp).unwrap();
     let secret = priv_key.decrypt(rsa::Pkcs1v15Encrypt, &ciphertext).unwrap();
 
     info!("Key successfully decrypted");

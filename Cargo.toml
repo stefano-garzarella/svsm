@@ -26,7 +26,7 @@ log = { version = "0.4.17", features = ["max_level_info", "release_max_level_inf
 packit = { git = "https://github.com/coconut-svsm/packit", version = "0.1.0" }
 aes-gcm = { version = "0.10.3", default-features = false, features = ["aes", "alloc"] }
 rand_chacha = { version = "0.3.1", default-features = false, optional = true}
-reference-kbc = { git = "https://github.com/stefano-garzarella/reference-kbc", rev ="7740242e2ed8", version = "0.1.0", default-features = false, features = ["alloc"], optional = true }
+reference-kbc = { git = "https://github.com/stefano-garzarella/reference-kbc", rev ="1e124f53b40ac", version = "0.1.0", default-features = false, features = ["alloc", "reference_kbs"], optional = true }
 rsa = { version = "0.9.3", default-features = false, optional = true }
 sha2 = { version = "0.10.8", default-features = false, features = ["force-soft"], optional = true }
 serde_json = { version = "1.0", default-features = false, optional = true}
