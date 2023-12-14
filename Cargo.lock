@@ -449,7 +449,7 @@ dependencies = [
 [[package]]
 name = "reference-kbc"
 version = "0.1.0"
-source = "git+https://github.com/stefano-garzarella/reference-kbc?rev=1e124f53b40ac#1e124f53b40acf22f54e2a864cae54994c9a6937"
+source = "git+https://github.com/stefano-garzarella/reference-kbc?rev=b09bbffbbb55612e3c5d07970c9aa5c34cf2dcaf#b09bbffbbb55612e3c5d07970c9aa5c34cf2dcaf"
 dependencies = [
  "anyhow",
  "base64ct",

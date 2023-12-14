@@ -10,18 +10,15 @@ use alloc::{
     boxed::Box,
     string::{String, ToString},
 };
-use log::{debug, error, info};
+use log::{error, info};
 use rand_chacha::rand_core::SeedableRng;
 use rdrand::RdSeed;
 use reference_kbc::{
-    client_proxy::{
-        Connection, Error as CPError, HttpMethod, Proxy, Read, Request, Response, Write,
-    },
+    client_proxy::{Connection, Error as CPError, Proxy, ProxyRequest, Read, RequestType, Write},
     client_session::ClientSession,
     clients::{reference_kbs::ReferenceKBSClientSnp, SnpGeneration},
 };
 use rsa::{traits::PublicKeyParts, RsaPrivateKey, RsaPublicKey};
-use serde_json::json;
 use sha2::{Digest, Sha512};
 
 use crate::{
@@ -56,23 +53,12 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
 
     let request = cs.request(&snp).unwrap();
 
-    let req = Request {
-        endpoint: "/kbs/v0/auth".to_string(),
-        method: HttpMethod::POST,
-        body: json!(&request),
-    };
-    proxy.write_json(&json!(req)).unwrap();
-    let data = proxy.read_json().unwrap();
-    let resp: Response = serde_json::from_value(data).unwrap();
-
-    let challenge = if resp.is_success() {
-        resp.body
-    } else {
-        error!(
-            "Authentication failed - status({0}) - {1}",
-            resp.status, resp.body
-        );
-        return Err(Error::AutenticationFailed);
+    let challenge = match snp.make(&mut proxy, RequestType::Auth, Some(&request)) {
+        Ok(challenge) => challenge.unwrap(),
+        Err(e) => {
+            error!("Authentication failed - {e}");
+            return Err(Error::AutenticationFailed);
+        }
     };
 
     let nonce = cs
@@ -101,41 +87,19 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
 
     let attestation = cs.attestation(key_n_encoded, key_e_encoded, &snp).unwrap();
 
-    let req = Request {
-        endpoint: "/kbs/v0/attest".to_string(),
-        method: HttpMethod::POST,
-        body: json!(&attestation),
-    };
-    proxy.write_json(&json!(req)).unwrap();
-    let data = proxy.read_json().unwrap();
-    let resp: Response = serde_json::from_value(data).unwrap();
-    if !resp.is_success() {
-        error!(
-            "Attestation failed - status({0}) - {1}",
-            resp.status, resp.body
-        );
+    if let Err(e) = snp.make(&mut proxy, RequestType::Attest, Some(&attestation)) {
+        error!("Attestation failed - {e}");
         return Err(Error::AutenticationFailed);
     }
 
     info!("Attestation done");
 
-    let req = Request {
-        endpoint: "/kbs/v0/key/".to_string() + workload_id,
-        method: HttpMethod::GET,
-        body: json!(""),
-    };
-    proxy.write_json(&json!(req)).unwrap();
-    let data = proxy.read_json().unwrap();
-    let resp: Response = serde_json::from_value(data).unwrap();
-    let ciphertext_encoded = if resp.is_success() {
-        debug!("Key (encrypted) received: {0}", resp.body);
-        resp.body
-    } else {
-        error!(
-            "Key request failed - status({0}) - {1}",
-            resp.status, resp.body
-        );
-        return Err(Error::AutenticationFailed);
+    let ciphertext_encoded = match snp.make(&mut proxy, RequestType::Key, None) {
+        Ok(ce) => ce.unwrap(),
+        Err(e) => {
+            error!("Key request failed - {e}");
+            return Err(Error::AutenticationFailed);
+        }
     };
 
     info!("Key successfully received");
