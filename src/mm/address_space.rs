@@ -89,7 +89,7 @@ pub const STACK_PAGES_GDB: usize = 8;
 #[cfg(not(feature = "enable-gdb"))]
 pub const STACK_PAGES_GDB: usize = 0;
 
-pub const STACK_PAGES: usize = 8 + STACK_PAGES_GDB;
+pub const STACK_PAGES: usize = 16 + STACK_PAGES_GDB;
 pub const STACK_SIZE: usize = PAGE_SIZE * STACK_PAGES;
 pub const STACK_GUARD_SIZE: usize = STACK_SIZE;
 pub const STACK_TOTAL_SIZE: usize = STACK_SIZE + STACK_GUARD_SIZE;
