@@ -440,8 +440,9 @@ checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 
 [[package]]
 name = "rdrand"
-version = "0.8.2"
-source = "git+https://github.com/stefano-garzarella/rust_rdrand?branch=svsm#017b60eee3a8e519db1f4ec6aaaa9ea4a3916cf4"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d92195228612ac8eed47adbc2ed0f04e513a4ccb98175b6f2bd04d963b533655"
 dependencies = [
  "rand_core",
 ]
