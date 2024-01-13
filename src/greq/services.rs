@@ -8,15 +8,19 @@
 
 extern crate alloc;
 
+use alloc::boxed::Box;
+
 use crate::{
     greq::{
         driver::{send_extended_guest_request, send_regular_guest_request},
         msg::SnpGuestRequestMsgType,
         pld_report::{SnpReportRequest, SnpReportResponse},
     },
-    protocols::errors::SvsmReqError,
+    protocols::errors::SvsmReqError, mm::page_memory::PageMemory,
 };
 use core::mem::size_of;
+
+use super::pld_report::AttestationReport;
 
 const REPORT_REQUEST_SIZE: usize = size_of::<SnpReportRequest>();
 const REPORT_RESPONSE_SIZE: usize = size_of::<SnpReportResponse>();
@@ -105,4 +109,34 @@ pub fn get_regular_report(buffer: &mut [u8]) -> Result<usize, SvsmReqError> {
 ///             * `psp_rc`: PSP return code
 pub fn get_extended_report(buffer: &mut [u8], certs: &mut [u8]) -> Result<usize, SvsmReqError> {
     get_report(buffer, Some(certs))
+}
+
+#[derive(Debug,Clone,Copy)]
+pub enum ReportError {
+    RequestError(SvsmReqError),
+    InvalidResponseSize(usize),
+    NotImpl,
+}
+
+const fn max(a: usize, b: usize) -> usize {
+    [a, b][(a < b) as usize]
+}
+
+pub type ReportUserData = [u8;64];
+
+pub fn get_report_ex(user_data: &ReportUserData) -> Result<(Box<AttestationReport>, PageMemory), ReportError> {
+
+    let mut request_buffer = PageMemory::new_zeroed(max(user_data.len(), size_of::<SnpReportResponse>()));
+    request_buffer[..user_data.len()].clone_from_slice(user_data);
+
+    let mut cert_buffer = PageMemory::new_zeroed(3 * crate::mm::PAGE_SIZE);
+
+    match get_report(&mut request_buffer, Some(&mut cert_buffer)) {
+        Ok(REPORT_RESPONSE_SIZE) => {
+            let response = SnpReportResponse::try_from_as_ref(&request_buffer).unwrap();
+            Ok((Box::new(response.report),cert_buffer))
+        },
+        Ok(wrong_size) => Err(ReportError::InvalidResponseSize(wrong_size)),
+        Err(e) => Err(ReportError::RequestError(e)),
+    }
 }

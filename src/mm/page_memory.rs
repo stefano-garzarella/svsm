@@ -1,4 +1,5 @@
 
+#[derive(Debug)]
 pub struct PageMemory {
     addr: crate::address::VirtAddr,
     size: usize,
