@@ -134,6 +134,7 @@ impl fmt::Display for Uuid {
 const OVMF_TABLE_FOOTER_GUID: &str = "96b582de-1fb2-45f7-baea-a366c55a082d";
 const OVMF_SEV_META_DATA_GUID: &str = "dc886566-984a-4798-a75e-5585a7bf67cc";
 const SVSM_INFO_GUID: &str = "a789a612-0597-4c4b-a49f-cbb1fe9d1ddd";
+const SEV_SECRET_GUID: &str = "4c2eb361-7d9b-4cc3-8081-127c90d3d294";
 
 #[derive(Clone, Copy, Debug)]
 #[repr(C, packed)]
@@ -262,6 +263,28 @@ fn parse_sev_meta(
     raw_meta: &RawMetaBuffer,
     raw_data: &[u8],
 ) -> Result<(), SvsmError> {
+    log::info!("SEV secret: searching");
+
+    // Find SEC secret
+    let sev_secret_uuid = Uuid::from_str(SEV_SECRET_GUID)?;
+    let Some(sev_secret_bytes) = find_table(&sev_secret_uuid, raw_data) else {
+        log::warn!("Could not find SEV secret in firmware");
+        return Ok(());
+    };
+
+    log::info!("SEV secret: found - len: {}", sev_secret_bytes.len());
+
+    let (base_bytes, size_bytes) = sev_secret_bytes.split_at(size_of::<u32>());
+    let sev_secret_base =
+        u32::from_le_bytes(base_bytes.try_into().map_err(|_| SvsmError::Firmware)?);
+
+    log::info!("SEV secret: base {}", sev_secret_base);
+
+    let sev_secret_size =
+        u32::from_le_bytes(size_bytes.try_into().map_err(|_| SvsmError::Firmware)?);
+
+    log::info!("SEV secret: size {}", sev_secret_size);
+
     // Find SEV metadata table
     let sev_meta_uuid = Uuid::from_str(OVMF_SEV_META_DATA_GUID)?;
     let Some(tbl) = find_table(&sev_meta_uuid, raw_data) else {
