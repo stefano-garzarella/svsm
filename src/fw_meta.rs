@@ -21,6 +21,7 @@ use bootlib::kernel_launch::KernelLaunchInfo;
 
 use core::fmt;
 use core::mem::{align_of, size_of, size_of_val};
+use core::ptr;
 use core::str::FromStr;
 
 #[derive(Clone, Debug)]
@@ -28,6 +29,7 @@ pub struct SevFWMetaData {
     pub cpuid_page: Option<PhysAddr>,
     pub secrets_page: Option<PhysAddr>,
     pub caa_page: Option<PhysAddr>,
+    pub efi_secret_page: Option<PhysAddr>,
     pub valid_mem: Vec<MemoryRegion<PhysAddr>>,
 }
 
@@ -37,6 +39,7 @@ impl SevFWMetaData {
             cpuid_page: None,
             secrets_page: None,
             caa_page: None,
+            efi_secret_page: None,
             valid_mem: Vec::new(),
         }
     }
@@ -80,6 +83,16 @@ impl From<&[u8; 16]> for Uuid {
                 mem[10], mem[11], mem[12], mem[13], mem[14], mem[15],
             ],
         }
+    }
+}
+
+impl Into<[u8; 16]> for Uuid {
+    fn into(self) -> [u8; 16] {
+        let mem = self.data;
+        [
+            mem[3], mem[2], mem[1], mem[0], mem[5], mem[4], mem[7], mem[6], mem[8], mem[9],
+            mem[10], mem[11], mem[12], mem[13], mem[14], mem[15],
+        ]
     }
 }
 
@@ -263,27 +276,38 @@ fn parse_sev_meta(
     raw_meta: &RawMetaBuffer,
     raw_data: &[u8],
 ) -> Result<(), SvsmError> {
-    log::info!("SEV secret: searching");
+    log::info!("EFI secret: searching");
 
-    // Find SEC secret
-    let sev_secret_uuid = Uuid::from_str(SEV_SECRET_GUID)?;
-    let Some(sev_secret_bytes) = find_table(&sev_secret_uuid, raw_data) else {
-        log::warn!("Could not find SEV secret in firmware");
+    // Find SEV secret
+    let efi_secret_uuid = Uuid::from_str(SEV_SECRET_GUID)?;
+    let Some(efi_secret_bytes) = find_table(&efi_secret_uuid, raw_data) else {
+        log::warn!("Could not find SEV_SECRET_GUID in firmware");
         return Ok(());
     };
 
-    log::info!("SEV secret: found - len: {}", sev_secret_bytes.len());
+    log::info!("EFI secret: found - len: {}", efi_secret_bytes.len());
 
-    let (base_bytes, size_bytes) = sev_secret_bytes.split_at(size_of::<u32>());
-    let sev_secret_base =
-        u32::from_le_bytes(base_bytes.try_into().map_err(|_| SvsmError::Firmware)?);
+    let (base_bytes, size_bytes) = efi_secret_bytes.split_at(size_of::<u32>());
+    let efi_secret_base =
+        u32::from_le_bytes(base_bytes.try_into().map_err(|_| SvsmError::Firmware)?) as usize;
 
-    log::info!("SEV secret: base {}", sev_secret_base);
+    log::info!("EFI secret: base {}", efi_secret_base);
 
-    let sev_secret_size =
-        u32::from_le_bytes(size_bytes.try_into().map_err(|_| SvsmError::Firmware)?);
+    let efi_secret_size =
+        u32::from_le_bytes(size_bytes.try_into().map_err(|_| SvsmError::Firmware)?) as usize;
 
-    log::info!("SEV secret: size {}", sev_secret_size);
+    log::info!("EFI secret: size {}", efi_secret_size);
+
+    if efi_secret_size != PAGE_SIZE {
+        log::error!(
+            "EFI secret: expected PAGE_SIZE[{}] len, found {}",
+            PAGE_SIZE,
+            efi_secret_size
+        );
+        return Err(SvsmError::Firmware);
+    }
+
+    meta.efi_secret_page = Some(PhysAddr::from(efi_secret_base));
 
     // Find SEV metadata table
     let sev_meta_uuid = Uuid::from_str(OVMF_SEV_META_DATA_GUID)?;
@@ -467,6 +491,11 @@ pub fn validate_fw_memory(
         regions.push(MemoryRegion::new(caa_paddr, PAGE_SIZE));
     }
 
+    // Add region for EFI secret page if present
+    if let Some(efi_secret_paddr) = fw_meta.efi_secret_page {
+        regions.push(MemoryRegion::new(efi_secret_paddr, PAGE_SIZE));
+    }
+
     // Sort regions by base address
     regions.sort_unstable_by_key(|a| a.start());
 
@@ -498,6 +527,11 @@ pub fn print_fw_meta(fw_meta: &SevFWMetaData) {
         None => log::info!("  CAA Page     : None"),
     };
 
+    match fw_meta.efi_secret_page {
+        Some(addr) => log::info!("  EFI Secret Page     : {:#010x}", addr),
+        None => log::info!("  EFI Secret Page     : None"),
+    };
+
     for region in &fw_meta.valid_mem {
         log::info!(
             "  Pre-Validated Region {:#018x}-{:#018x}",
@@ -505,4 +539,46 @@ pub fn print_fw_meta(fw_meta: &SevFWMetaData) {
             region.end()
         );
     }
+}
+
+const EFI_SECRET_TABLE_HEADER_GUID: &str = "1e74f542-71dd-4d66-963e-ef4287ff173b";
+
+#[derive(Debug, Clone, Copy)]
+#[repr(C, packed)]
+struct EFISecretHeader {
+    guid: [u8; size_of::<Uuid>()],
+    len: u32,
+}
+
+impl Default for EFISecretHeader {
+    fn default() -> Self {
+        EFISecretHeader {
+            guid: Uuid::from_str(EFI_SECRET_TABLE_HEADER_GUID).unwrap().into(),
+            len: size_of::<Self>() as u32,
+        }
+    }
+}
+
+pub fn inject_efi_secrets_to_fw(fw_meta: &SevFWMetaData) -> Result<(), SvsmError> {
+    let efi_secret_page = match fw_meta.efi_secret_page {
+        Some(addr) => addr,
+        None => {
+            log::info!("FW does not specify SEV_SECRET location",);
+            return Ok(());
+        }
+    };
+
+    let guard = PerCPUPageMappingGuard::create_4k(efi_secret_page)?;
+    let start = guard.virt_addr();
+
+    let target = ptr::NonNull::new(start.as_mut_ptr::<EFISecretHeader>()).unwrap();
+    let hdr = EFISecretHeader::default();
+
+    // Copy data
+    unsafe {
+        let dst = target.as_ptr();
+        *dst = hdr;
+    }
+
+    Ok(())
 }

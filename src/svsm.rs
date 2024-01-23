@@ -9,7 +9,7 @@
 
 extern crate alloc;
 
-use svsm::fw_meta::{print_fw_meta, validate_fw_memory, SevFWMetaData};
+use svsm::fw_meta::{inject_efi_secrets_to_fw, print_fw_meta, validate_fw_memory, SevFWMetaData};
 
 use bootlib::kernel_launch::KernelLaunchInfo;
 use core::arch::global_asm;
@@ -433,6 +433,10 @@ pub extern "C" fn svsm_main() {
 
         if let Err(e) = copy_tables_to_fw(fw_meta) {
             panic!("Failed to copy firmware tables: {:#?}", e);
+        }
+
+        if let Err(e) = inject_efi_secrets_to_fw(fw_meta) {
+            panic!("Failed to EFI secrets: {:#?}", e);
         }
 
         if let Err(e) = validate_fw(&config, &LAUNCH_INFO) {
