@@ -587,7 +587,7 @@ pub fn inject_efi_secrets_to_fw(fw_meta: &SevFWMetaData) -> Result<(), SvsmError
 
     let mut hdr = EFISecretHeader::default();
 
-    let entry_payload = *b"red hat";
+    let entry_payload = "red hat".as_bytes();
     let entry_hdr = EFISecretEntryHeader::new(RANDOM_GUID, entry_payload.len());
 
     hdr.len += entry_hdr.len;
@@ -606,14 +606,18 @@ pub fn inject_efi_secrets_to_fw(fw_meta: &SevFWMetaData) -> Result<(), SvsmError
     let entry_payload_vaddr = entry_hdr_vaddr
         .checked_add(size_of::<EFISecretEntryHeader>())
         .ok_or(SvsmError::Firmware)?;
-    //let mut entry_payload_ptr = ptr::NonNull::new(entry_payload_vaddr.as_mut_ptr::<[u8]>()).unwrap();
+    let entry_payload_ptr = ptr::NonNull::new(entry_payload_vaddr.as_mut_ptr::<u8>()).unwrap();
 
     // Copy data
     unsafe {
         *hdr_ptr.as_ptr() = hdr;
         *entry_hdr_ptr.as_ptr() = entry_hdr;
 
-        ptr::write_unaligned(entry_payload_vaddr.as_mut_ptr(), entry_payload);
+        ptr::copy(
+            entry_payload.as_ptr(),
+            entry_payload_ptr.as_ptr(),
+            entry_payload.len(),
+        );
     }
 
     Ok(())
