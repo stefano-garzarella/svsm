@@ -6,7 +6,7 @@
 
 extern crate alloc;
 
-use crate::address::PhysAddr;
+use crate::address::{Address, PhysAddr};
 use crate::config::SvsmConfig;
 use crate::cpu::percpu::this_cpu_mut;
 use crate::error::SvsmError;
@@ -542,6 +542,23 @@ pub fn print_fw_meta(fw_meta: &SevFWMetaData) {
 }
 
 const EFI_SECRET_TABLE_HEADER_GUID: &str = "1e74f542-71dd-4d66-963e-ef4287ff173b";
+const RANDOM_GUID: &str = "fe72f544-41d0-4035-a23e-aaaaaaaaaaaa";
+
+#[derive(Debug, Clone, Copy)]
+#[repr(C, packed)]
+struct EFISecretEntryHeader {
+    guid: [u8; size_of::<Uuid>()],
+    len: u32,
+}
+
+impl EFISecretEntryHeader {
+    fn new(guid: &str, data_len: usize) -> Self {
+        EFISecretEntryHeader {
+            guid: Uuid::from_str(guid).unwrap().into(),
+            len: (data_len + size_of::<Self>()) as u32,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 #[repr(C, packed)]
@@ -568,16 +585,35 @@ pub fn inject_efi_secrets_to_fw(fw_meta: &SevFWMetaData) -> Result<(), SvsmError
         }
     };
 
+    let mut hdr = EFISecretHeader::default();
+
+    let entry_payload = *b"red hat";
+    let entry_hdr = EFISecretEntryHeader::new(RANDOM_GUID, entry_payload.len());
+
+    hdr.len += entry_hdr.len;
+
     let guard = PerCPUPageMappingGuard::create_4k(efi_secret_page)?;
     let start = guard.virt_addr();
 
-    let target = ptr::NonNull::new(start.as_mut_ptr::<EFISecretHeader>()).unwrap();
-    let hdr = EFISecretHeader::default();
+    let hdr_ptr = ptr::NonNull::new(start.as_mut_ptr::<EFISecretHeader>()).unwrap();
+
+    let entry_hdr_vaddr = start
+        .checked_add(size_of::<EFISecretHeader>())
+        .ok_or(SvsmError::Firmware)?;
+    let entry_hdr_ptr =
+        ptr::NonNull::new(entry_hdr_vaddr.as_mut_ptr::<EFISecretEntryHeader>()).unwrap();
+
+    let entry_payload_vaddr = entry_hdr_vaddr
+        .checked_add(size_of::<EFISecretEntryHeader>())
+        .ok_or(SvsmError::Firmware)?;
+    //let mut entry_payload_ptr = ptr::NonNull::new(entry_payload_vaddr.as_mut_ptr::<[u8]>()).unwrap();
 
     // Copy data
     unsafe {
-        let dst = target.as_ptr();
-        *dst = hdr;
+        *hdr_ptr.as_ptr() = hdr;
+        *entry_hdr_ptr.as_ptr() = entry_hdr;
+
+        ptr::write_unaligned(entry_payload_vaddr.as_mut_ptr(), entry_payload);
     }
 
     Ok(())
