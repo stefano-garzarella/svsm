@@ -542,7 +542,7 @@ pub fn print_fw_meta(fw_meta: &SevFWMetaData) {
 }
 
 const EFI_SECRET_TABLE_HEADER_GUID: &str = "1e74f542-71dd-4d66-963e-ef4287ff173b";
-const RANDOM_GUID: &str = "fe72f544-41d0-4035-a23e-aaaaaaaaaaaa";
+const LUKS_KEY_GUID: &str = "736869e5-84f0-4973-92ec-06879ce3da0b";
 
 #[derive(Debug, Clone, Copy)]
 #[repr(C, packed)]
@@ -587,8 +587,8 @@ pub fn inject_efi_secrets_to_fw(fw_meta: &SevFWMetaData) -> Result<(), SvsmError
 
     let mut hdr = EFISecretHeader::default();
 
-    let entry_payload = "red hat".as_bytes();
-    let entry_hdr = EFISecretEntryHeader::new(RANDOM_GUID, entry_payload.len());
+    let entry_payload = "RED-HAT".as_bytes();
+    let entry_hdr = EFISecretEntryHeader::new(LUKS_KEY_GUID, entry_payload.len());
 
     hdr.len += entry_hdr.len;
 
