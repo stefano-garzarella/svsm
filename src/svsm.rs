@@ -53,8 +53,8 @@ use svsm::types::{PageSize, GUEST_VMPL, PAGE_SIZE};
 use svsm::utils::{halt, immut_after_init::ImmutAfterInitCell, zero_mem_region};
 
 use svsm::mm::validate::{init_valid_bitmap_ptr, migrate_valid_bitmap};
-use alloc::format;
 
+use alloc::format;
 use core::ptr;
 
 extern "C" {
@@ -446,19 +446,15 @@ pub extern "C" fn svsm_main() {
     use svsm::greq::services::get_report_ex;
 
     log::info!("Getting report");
-    let res = get_report_ex(&[0u8;64]);
+    let res = get_report_ex(&[0u8; 64]);
     match res {
         Ok((report, certs)) => {
-
             log::info!("Got a report: {:02x?}", &report);
             log::info!("Got Certs {:02x?}", &certs[..64]);
 
-            let measurement_string = report
-                .measurement
-                .map(|v| format!("{v:02x}"))
-                .join("");
+            let measurement_string = report.measurement.map(|v| format!("{v:02x}")).join("");
             log::info!("SNP Launch Measurement: {measurement_string}");
-        },
+        }
         Err(e) => log::info!("Error getting attestation report: {e:?}"),
     }
 
