@@ -27,6 +27,8 @@ pub mod fw_meta;
 pub mod greq;
 pub mod igvm_params;
 pub mod io;
+#[cfg(feature = "kbc")]
+pub mod kbc;
 pub mod kernel_region;
 pub mod locking;
 pub mod mm;

@@ -35,6 +35,7 @@ use svsm::fs::{initialize_fs, populate_ram_fs};
 use svsm::fw_cfg::FwCfg;
 use svsm::greq::driver::guest_request_driver_init;
 use svsm::igvm_params::IgvmParams;
+use svsm::kbc;
 use svsm::kernel_region::new_kernel_region;
 use svsm::mm::alloc::{memory_info, print_memory_info, root_mem_init};
 use svsm::mm::memory::init_memory_map;
@@ -456,6 +457,11 @@ pub extern "C" fn svsm_main() {
             log::info!("SNP Launch Measurement: {measurement_string}");
         }
         Err(e) => log::info!("Error getting attestation report: {e:?}"),
+    }
+
+    match kbc::get_secret("svsm") {
+        Ok(secret) => log::info!("Got the secret: {secret}"),
+        Err(e) => log::error!("Error doing remote attestation: {e:?}"),
     }
 
     if let Some(ref fw_meta) = fw_metadata {
