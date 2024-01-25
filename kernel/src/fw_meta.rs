@@ -9,6 +9,7 @@ extern crate alloc;
 use crate::address::PhysAddr;
 use crate::config::SvsmConfig;
 use crate::cpu::ghcb::current_ghcb;
+use crate::efi_secrets::set_sev_secret_addr;
 use crate::error::SvsmError;
 use crate::kernel_region::new_kernel_region;
 use crate::mm::PerCPUPageMappingGuard;
@@ -28,6 +29,7 @@ pub struct SevFWMetaData {
     pub cpuid_page: Option<PhysAddr>,
     pub secrets_page: Option<PhysAddr>,
     pub caa_page: Option<PhysAddr>,
+    pub efi_secret_page: Option<PhysAddr>,
     pub valid_mem: Vec<MemoryRegion<PhysAddr>>,
 }
 
@@ -37,6 +39,7 @@ impl SevFWMetaData {
             cpuid_page: None,
             secrets_page: None,
             caa_page: None,
+            efi_secret_page: None,
             valid_mem: Vec::new(),
         }
     }
@@ -54,7 +57,7 @@ fn from_hex(c: char) -> Result<u8, SvsmError> {
 }
 
 #[derive(Copy, Clone, Debug)]
-struct Uuid {
+pub struct Uuid {
     data: [u8; 16],
 }
 
@@ -80,6 +83,16 @@ impl From<&[u8; 16]> for Uuid {
                 mem[10], mem[11], mem[12], mem[13], mem[14], mem[15],
             ],
         }
+    }
+}
+
+impl Into<[u8; 16]> for Uuid {
+    fn into(self) -> [u8; 16] {
+        let mem = self.data;
+        [
+            mem[3], mem[2], mem[1], mem[0], mem[5], mem[4], mem[7], mem[6], mem[8], mem[9],
+            mem[10], mem[11], mem[12], mem[13], mem[14], mem[15],
+        ]
     }
 }
 
@@ -133,6 +146,7 @@ impl fmt::Display for Uuid {
 
 const OVMF_TABLE_FOOTER_GUID: &str = "96b582de-1fb2-45f7-baea-a366c55a082d";
 const OVMF_SEV_META_DATA_GUID: &str = "dc886566-984a-4798-a75e-5585a7bf67cc";
+const SEV_SECRET_GUID: &str = "4c2eb361-7d9b-4cc3-8081-127c90d3d294";
 const SVSM_INFO_GUID: &str = "a789a612-0597-4c4b-a49f-cbb1fe9d1ddd";
 
 #[derive(Clone, Copy, Debug)]
@@ -246,6 +260,9 @@ pub fn parse_fw_meta_data(mem: &[u8]) -> Result<SevFWMetaData, SvsmError> {
         return Err(SvsmError::Firmware);
     }
 
+    // Search and parse SEV secret page
+    search_sev_secret_page(&mut meta_data, raw_data)?;
+
     // Search and parse SEV metadata
     parse_sev_meta(&mut meta_data, raw_meta, raw_data)?;
 
@@ -256,6 +273,17 @@ pub fn parse_fw_meta_data(mem: &[u8]) -> Result<SevFWMetaData, SvsmError> {
     }
 
     Ok(meta_data)
+}
+
+fn search_sev_secret_page(meta: &mut SevFWMetaData, raw_data: &[u8]) -> Result<(), SvsmError> {
+    let efi_secret_uuid = Uuid::from_str(SEV_SECRET_GUID)?;
+    let Some(efi_secret_bytes) = find_table(&efi_secret_uuid, raw_data) else {
+        log::warn!("Could not find SEV_SECRET_GUID in firmware");
+        return Ok(());
+    };
+
+    log::debug!("EFI secret: found - len: {}", efi_secret_bytes.len());
+    set_sev_secret_addr(meta, efi_secret_bytes)
 }
 
 fn parse_sev_meta(
@@ -439,6 +467,11 @@ pub fn validate_fw_memory(
         regions.push(MemoryRegion::new(secrets_paddr, PAGE_SIZE));
     }
 
+    // Add region for EFI secret page if present
+    if let Some(efi_secret_paddr) = fw_meta.efi_secret_page {
+        regions.push(MemoryRegion::new(efi_secret_paddr, PAGE_SIZE));
+    }
+
     // Add region for CAA page if present
     if let Some(caa_paddr) = fw_meta.caa_page {
         regions.push(MemoryRegion::new(caa_paddr, PAGE_SIZE));
@@ -468,6 +501,11 @@ pub fn print_fw_meta(fw_meta: &SevFWMetaData) {
     match fw_meta.secrets_page {
         Some(addr) => log::info!("  Secrets Page : {:#010x}", addr),
         None => log::info!("  Secrets Page : None"),
+    };
+
+    match fw_meta.efi_secret_page {
+        Some(addr) => log::info!("  EFI Secrets Page     : {:#010x}", addr),
+        None => log::info!("  EFI Secrets Page     : None"),
     };
 
     match fw_meta.caa_page {
