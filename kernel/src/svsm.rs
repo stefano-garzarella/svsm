@@ -30,6 +30,8 @@ use svsm::cpu::percpu::{this_cpu, this_cpu_mut, this_cpu_shared, this_cpu_unsafe
 use svsm::cpu::smp::start_secondary_cpus;
 use svsm::debug::gdbstub::svsm_gdbstub::{debug_break, gdbstub_start};
 use svsm::debug::stacktrace::print_stack;
+#[cfg(feature = "raclients")]
+use svsm::efi_secrets::inject_efi_secrets_to_fw;
 use svsm::error::SvsmError;
 use svsm::fs::{initialize_fs, populate_ram_fs};
 use svsm::fw_cfg::FwCfg;
@@ -448,13 +450,20 @@ pub extern "C" fn svsm_main() {
 
     guest_request_driver_init();
 
-    #[cfg(feature = "raclients")]
-    match raclients::get_secret("svsm") {
-        Ok(secret) => log::info!("Got the secret: {secret}"),
-        Err(e) => log::error!("Error doing remote attestation: {e:?}"),
-    }
-
     if let Some(ref fw_meta) = fw_metadata {
+        #[cfg(feature = "raclients")]
+        match raclients::get_secret("svsm") {
+            Ok(secret) => {
+                log::info!("Got the secret: {secret}");
+
+                if let Err(e) = inject_efi_secrets_to_fw(fw_meta, secret) {
+                    panic!("Failed to EFI secrets: {:#?}", e);
+                }
+            }
+
+            Err(e) => log::error!("Error doing remote attestation: {e:?}"),
+        }
+
         prepare_fw_launch(fw_meta).expect("Failed to setup guest VMSA/CAA");
     }
 
