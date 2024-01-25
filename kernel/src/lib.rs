@@ -17,6 +17,7 @@ pub mod console;
 pub mod cpu;
 pub mod crypto;
 pub mod debug;
+pub mod efi_secrets;
 pub mod error;
 pub mod fs;
 pub mod fw_cfg;
