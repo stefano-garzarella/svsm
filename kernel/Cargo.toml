@@ -30,15 +30,24 @@ intrusive-collections.workspace = true
 log = { workspace = true, features = ["max_level_info", "release_max_level_info"] }
 packit.workspace = true
 libmstpm = { workspace = true, optional = true }
+# raclients dependecies
+rand_chacha = { workspace = true, optional = true}
+raclients = { workspace = true, features = ["alloc", "reference_kbs"], optional = true }
+rsa = { workspace = true, optional = true }
+sha2 = { workspace = true, features = ["force-soft"], optional = true }
+serde_json = { workspace = true, features = ["alloc"], optional = true}
+hex = { workspace = true, features = ["alloc"], optional = true }
+rdrand = { workspace = true, optional = true }
 
 [target."x86_64-unknown-none".dev-dependencies]
 test.workspace = true
 
 [features]
-default = ["mstpm"]
+default = ["mstpm", "raclients"] #TODO: remove raclients
 default-test = []
 enable-gdb = ["dep:gdbstub", "dep:gdbstub_arch"]
 fuzzing-hooks = []
+raclients = ["dep:raclients", "dep:rand_chacha", "dep:rsa", "dep:sha2", "dep:serde_json", "dep:hex", "dep:rdrand"]
 mstpm = ["dep:libmstpm"]
 
 [dev-dependencies]
