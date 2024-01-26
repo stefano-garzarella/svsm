@@ -56,7 +56,6 @@ use svsm::utils::{halt, immut_after_init::ImmutAfterInitCell, zero_mem_region};
 
 use svsm::mm::validate::{init_valid_bitmap_ptr, migrate_valid_bitmap};
 
-use alloc::format;
 use core::ptr;
 
 extern "C" {
@@ -445,33 +444,16 @@ pub extern "C" fn svsm_main() {
 
     guest_request_driver_init();
 
-    use svsm::greq::services::get_report_ex;
-
-    log::info!("Getting report");
-    let res = get_report_ex(&[0u8; 64]);
-    match res {
-        Ok((report, certs)) => {
-            log::info!("Got a report: {:02x?}", &report);
-            log::info!("Got Certs {:02x?}", &certs[..64]);
-
-            let measurement_string = report.measurement.map(|v| format!("{v:02x}")).join("");
-            log::info!("SNP Launch Measurement: {measurement_string}");
-        }
-        Err(e) => log::info!("Error getting attestation report: {e:?}"),
-    }
-
     if let Some(ref fw_meta) = fw_metadata {
         #[cfg(feature = "kbc")]
         match kbc::get_secret("svsm") {
             Ok(secret) => {
-                log::info!("Got the secret: {secret}");
-
                 if let Err(e) = inject_efi_secrets_to_fw(fw_meta, secret) {
                     panic!("Failed to EFI secrets: {:#?}", e);
                 }
             }
 
-            Err(e) => log::error!("Error doing remote attestation: {e:?}"),
+            Err(e) => panic!("Error doing remote attestation: {e:?}"),
         }
 
         prepare_fw_launch(fw_meta).expect("Failed to setup guest VMSA/CAA");
