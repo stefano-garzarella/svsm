@@ -131,4 +131,7 @@ clean:
 	rm -f ${STAGE1_OBJS} utils/gen_meta utils/print-meta
 	rm -rf bin
 
+distclean: clean
+	$(MAKE) -C libmstpm $@
+
 .PHONY: test clean clippy bin/stage2.bin bin/svsm-kernel.elf bin/test-kernel.elf distclean
