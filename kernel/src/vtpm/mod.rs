@@ -73,6 +73,31 @@ pub trait VtpmInterface: MsTpmSimulatorInterface {
     fn init(&mut self) -> Result<(), SvsmReqError>;
 }
 
+#[derive(Debug)]
+pub struct VtpmRef {
+    vtpm_ptr: *mut Vtpm,
+}
+
+impl VtpmRef {
+    fn new(ptr: *mut Vtpm) -> Self {
+        Self { vtpm_ptr: ptr }
+    }
+}
+
+impl Deref for VtpmRef {
+    type Target = Vtpm;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.vtpm_ptr }
+    }
+}
+
+impl DerefMut for VtpmRef {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *self.vtpm_ptr }
+    }
+}
+
 static VTPM: SpinLock<Vtpm> = SpinLock::new(Vtpm::new());
 
 /// Initialize the TPM by calling the init() implementation of the
@@ -84,4 +109,9 @@ pub fn vtpm_init() -> Result<(), SvsmReqError> {
     }
     vtpm.init()?;
     Ok(())
+}
+
+pub fn vtpm_get_locked() -> VtpmRef {
+    let vtpm = addr_of_mut!(*VTPM.lock());
+    VtpmRef::new(vtpm)
 }
