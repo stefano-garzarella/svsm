@@ -12,7 +12,8 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 : "${IGVM:=$SCRIPT_DIR/../bin/coconut-qemu.igvm}"
 
 C_BIT_POS=`$SCRIPT_DIR/../utils/cbit`
-DEBUG_SERIAL=""
+DEBUG_SERIAL="-serial null"
+PROXY_SERIAL="-serial null"
 QEMU_EXIT_DEVICE=""
 QEMU_TEST_IO_DEVICE=""
 
@@ -35,6 +36,11 @@ while [[ $# -gt 0 ]]; do
       ;;
     -d|--debugserial)
       DEBUG_SERIAL="-serial pty"
+      shift
+      ;;
+    -p|--proxy)
+      PROXY_SERIAL="-serial unix:$2"
+      shift
       shift
       ;;
     --unit-tests)
@@ -112,6 +118,7 @@ $SUDO_CMD \
     -monitor none \
     -serial stdio \
     $DEBUG_SERIAL \
+    $PROXY_SERIAL \
     $QEMU_EXIT_DEVICE \
     $QEMU_TEST_IO_DEVICE
 
