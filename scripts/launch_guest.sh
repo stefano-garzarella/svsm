@@ -51,6 +51,11 @@ while [[ $# -gt 0 ]]; do
       COM2_SERIAL="-serial pty"
       shift
       ;;
+    -p|--proxy)
+      COM3_SERIAL="-serial unix:$2"
+      shift
+      shift
+      ;;
     --unit-tests)
       QEMU_EXIT_DEVICE="-device isa-debug-exit,iobase=0xf4,iosize=0x04"
       QEMU_TEST_IO_DEVICE="-device pc-testdev"
