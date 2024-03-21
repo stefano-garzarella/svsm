@@ -32,8 +32,6 @@ use svsm::cpu::percpu::{this_cpu, this_cpu_mut};
 use svsm::cpu::smp::start_secondary_cpus;
 use svsm::debug::gdbstub::svsm_gdbstub::{debug_break, gdbstub_start};
 use svsm::debug::stacktrace::print_stack;
-#[cfg(feature = "raclients")]
-use svsm::efi_secrets::inject_efi_secrets_to_fw;
 use svsm::elf;
 use svsm::error::SvsmError;
 use svsm::fs::{initialize_fs, populate_ram_fs};
@@ -462,24 +460,21 @@ pub extern "C" fn svsm_main() {
     }
 
     if let Some(ref fw_meta) = fw_metadata {
-        #[cfg(feature = "raclients")]
-        match raclients::get_secret("svsm") {
-            Ok(secret) => {
-                log::info!("Got the secret: {secret}");
-
-                if let Err(e) = inject_efi_secrets_to_fw(fw_meta, secret) {
-                    panic!("Failed to EFI secrets: {:#?}", e);
-                }
-            }
-
-            Err(e) => log::error!("Error doing remote attestation: {e:?}"),
-        }
-
         prepare_fw_launch(fw_meta).expect("Failed to setup guest VMSA/CAA");
     }
 
+    #[cfg(feature = "raclients")]
+    let nv_state = match raclients::get_secret("svsm") {
+        Ok(secret) => Some(hex::decode(secret).expect("Failed to decode nv_state")),
+
+        Err(e) => {
+            log::error!("Error doing remote attestation: {e:?}");
+            None
+        }
+    };
+
     #[cfg(feature = "mstpm")]
-    if let Err(e) = vtpm_init() {
+    if let Err(e) = vtpm_init(nv_state) {
         panic!("vTPM failed to initialize - {:?}", e);
     }
 

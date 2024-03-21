@@ -17,7 +17,8 @@ use alloc::vec::Vec;
 use core::{ffi::c_void, ptr::addr_of_mut};
 use libmstpm::bindings::{
     TPM_Manufacture, TPM_TearDown, _plat__LocalitySet, _plat__NVDisable, _plat__NVEnable,
-    _plat__RunCommand, _plat__SetNvAvail, _plat__Signal_PowerOn, _plat__Signal_Reset,
+    _plat__NvMemoryWrite, _plat__RunCommand, _plat__SetNvAvail, _plat__Signal_PowerOn,
+    _plat__Signal_Reset,
 };
 
 use crate::{
@@ -153,7 +154,7 @@ impl VtpmInterface for MsTpm {
         self.is_powered_on
     }
 
-    fn init(&mut self) -> Result<(), SvsmReqError> {
+    fn init(&mut self, nv_state: Option<Vec<u8>>) -> Result<(), SvsmReqError> {
         // Initialize the MS TPM following the same steps done in the Simulator:
         //
         // 1. Manufacture it for the first time
@@ -165,21 +166,38 @@ impl VtpmInterface for MsTpm {
 
         unsafe { _plat__NVEnable(VirtAddr::null().as_mut_ptr::<c_void>()) };
 
-        let mut rc = self.manufacture(1)?;
-        if rc != 0 {
-            unsafe { _plat__NVDisable(1) };
-            return Err(SvsmReqError::incomplete());
-        }
+        match nv_state {
+            Some(state) => {
+                let rc = unsafe {
+                    _plat__NvMemoryWrite(
+                        0,
+                        state.len().try_into().unwrap(),
+                        state.as_ptr() as *mut c_void,
+                    )
+                };
+                if rc != 1 {
+                    unsafe { _plat__NVDisable(1) };
+                    return Err(SvsmReqError::incomplete());
+                }
+            }
+            None => {
+                let mut rc = self.manufacture(1)?;
+                if rc != 0 {
+                    unsafe { _plat__NVDisable(1) };
+                    return Err(SvsmReqError::incomplete());
+                }
 
-        rc = self.manufacture(0)?;
-        if rc != 1 {
-            return Err(SvsmReqError::incomplete());
-        }
+                rc = self.manufacture(0)?;
+                if rc != 1 {
+                    return Err(SvsmReqError::incomplete());
+                }
 
-        self.teardown()?;
-        rc = self.manufacture(1)?;
-        if rc != 0 {
-            return Err(SvsmReqError::incomplete());
+                self.teardown()?;
+                rc = self.manufacture(1)?;
+                if rc != 0 {
+                    return Err(SvsmReqError::incomplete());
+                }
+            }
         }
 
         self.signal_poweron(false)?;

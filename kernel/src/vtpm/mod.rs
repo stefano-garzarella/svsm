@@ -10,6 +10,9 @@
 /// TPM 2.0 Reference Implementation by Microsoft
 pub mod mstpm;
 
+extern crate alloc;
+
+use alloc::vec::Vec;
 use core::{
     ops::{Deref, DerefMut},
     ptr::addr_of_mut,
@@ -70,7 +73,7 @@ pub trait VtpmInterface: MsTpmSimulatorInterface {
 
     /// Prepare the TPM to be used for the first time. At this stage,
     /// the TPM is manufactured.
-    fn init(&mut self) -> Result<(), SvsmReqError>;
+    fn init(&mut self, nv_state: Option<Vec<u8>>) -> Result<(), SvsmReqError>;
 }
 
 #[derive(Debug)]
@@ -102,12 +105,12 @@ static VTPM: SpinLock<Vtpm> = SpinLock::new(Vtpm::new());
 
 /// Initialize the TPM by calling the init() implementation of the
 /// [`VtpmInterface`]
-pub fn vtpm_init() -> Result<(), SvsmReqError> {
+pub fn vtpm_init(nv_state: Option<Vec<u8>>) -> Result<(), SvsmReqError> {
     let mut vtpm = VTPM.lock();
     if vtpm.is_powered_on() {
         return Ok(());
     }
-    vtpm.init()?;
+    vtpm.init(nv_state)?;
     Ok(())
 }
 
