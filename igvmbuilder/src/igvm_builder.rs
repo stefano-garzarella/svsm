@@ -229,7 +229,7 @@ impl IgvmBuilder {
             Hypervisor::Qemu => {
                 // Place the kernel area at 512 GB with a size of 16 MB.
                 param_block.kernel_base = 0x0000008000000000;
-                param_block.kernel_size = 0x01000000;
+                param_block.kernel_size = 0x02000000;
             }
             Hypervisor::HyperV => {
                 // Place the kernel area at 64 MB with a size of 16 MB.
