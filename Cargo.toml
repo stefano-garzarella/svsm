@@ -27,8 +27,8 @@ bitflags = "2.4"
 clap = { version = "4.4.14", default-features = false}
 gdbstub = { version = "0.6.6", default-features = false }
 gdbstub_arch = { version = "0.2.4" }
-igvm_defs = { git = "https://github.com/stefano-garzarella/igvm", rev = "6d28473a9fe2f7676e32822b33c98cd173d60ed3", default-features = false}
-igvm = { git = "https://github.com/stefano-garzarella/igvm", rev = "6d28473a9fe2f7676e32822b33c98cd173d60ed3", default-features = false}
+igvm_defs = { version = "0.1.7", default-features = false}
+igvm = { version = "0.1.7", default-features = false}
 intrusive-collections = "0.9.6"
 libfuzzer-sys = "0.4"
 log = "0.4.17"
