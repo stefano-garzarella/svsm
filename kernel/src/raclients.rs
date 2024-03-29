@@ -106,7 +106,14 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
     info!("KBC: Key successfully received");
 
     let ciphertext = cs.secret(ciphertext_encoded, &snp).unwrap();
-    let secret = priv_key.decrypt(rsa::Pkcs1v15Encrypt, &ciphertext).unwrap();
+    // HACK: reference-kbs & keybroker use RSA to encrypt the secret, so
+    // it can fail if the secret is too big (e.g. RSA key 2048 bits - max
+    // cyphertex 256 bytes)
+    let secret = if ciphertext.len() < 256 {
+        priv_key.decrypt(rsa::Pkcs1v15Encrypt, &ciphertext).unwrap()
+    } else {
+        ciphertext
+    };
 
     info!("KBC: Key successfully decrypted");
 
