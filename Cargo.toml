@@ -3,7 +3,7 @@ resolver = "2"
 members = [
     # repo tooling
     "igvmbuilder",
-    "igvmmeasure",
+#    "igvmmeasure",
     # binary targets
     "kernel",
     # fuzzing
