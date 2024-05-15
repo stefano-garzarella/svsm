@@ -42,6 +42,8 @@ use svsm::mm::pagetable::paging_init;
 use svsm::mm::virtualrange::virt_log_usage;
 use svsm::mm::{init_kernel_mapping_info, PerCPUPageMappingGuard};
 use svsm::platform::{SvsmPlatformCell, SVSM_PLATFORM};
+#[cfg(feature = "raclients")]
+use svsm::raclients;
 use svsm::requests::{request_loop, request_processing_main, update_mappings};
 use svsm::serial::SerialPort;
 use svsm::sev::utils::{rmp_adjust, RMPFlags};
@@ -445,6 +447,12 @@ pub extern "C" fn svsm_main() {
     }
 
     guest_request_driver_init();
+
+    #[cfg(feature = "raclients")]
+    match raclients::get_secret("svsm") {
+        Ok(secret) => log::info!("Got the secret: {secret}"),
+        Err(e) => log::error!("Error doing remote attestation: {e:?}"),
+    }
 
     if let Some(ref fw_meta) = fw_metadata {
         prepare_fw_launch(fw_meta).expect("Failed to setup guest VMSA/CAA");
