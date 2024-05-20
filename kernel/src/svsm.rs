@@ -57,6 +57,12 @@ use svsm::vtpm::vtpm_init;
 
 use svsm::mm::validate::{init_valid_bitmap_ptr, migrate_valid_bitmap};
 
+extern crate alloc;
+
+use alloc::{format, vec};
+use svsm::greq::pld_report::SnpReportResponse;
+use svsm::greq::services::get_regular_report;
+
 extern "C" {
     pub static bsp_stack_end: u8;
 }
@@ -458,6 +464,22 @@ pub extern "C" fn svsm_main() {
     }
 
     create_kernel_task(request_processing_main).expect("Failed to launch request processing task");
+
+    let mut buf = vec![0; size_of::<SnpReportResponse>()];
+
+    let size = get_regular_report(&mut buf).unwrap();
+    assert_eq!(size, buf.len());
+
+    let response = SnpReportResponse::try_from_as_ref(&buf).unwrap();
+
+    if response.validate().is_ok() {
+        let measurement_string = response
+            .report
+            .measurement
+            .map(|v| format!("{v:02x}"))
+            .join("");
+        panic!("SNP Launch Measurement: {measurement_string}");
+    }
 
     #[cfg(test)]
     crate::test_main();
