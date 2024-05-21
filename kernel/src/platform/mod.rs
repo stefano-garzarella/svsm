@@ -10,6 +10,7 @@ use crate::error::SvsmError;
 use crate::io::IOPort;
 use crate::platform::native::NativePlatform;
 use crate::platform::snp::SnpPlatform;
+use crate::platform::tdp::TdpPlatform;
 use crate::types::PageSize;
 use crate::utils::immut_after_init::ImmutAfterInitCell;
 use crate::utils::MemoryRegion;
@@ -18,6 +19,7 @@ use bootlib::platform::SvsmPlatformType;
 
 pub mod native;
 pub mod snp;
+pub mod tdp;
 
 pub static SVSM_PLATFORM: ImmutAfterInitCell<SvsmPlatformCell> = ImmutAfterInitCell::uninit();
 
@@ -84,6 +86,7 @@ pub trait SvsmPlatform {
 #[derive(Clone, Copy, Debug)]
 pub enum SvsmPlatformCell {
     Snp(SnpPlatform),
+    Tdp(TdpPlatform),
     Native(NativePlatform),
 }
 
@@ -92,6 +95,7 @@ impl SvsmPlatformCell {
         match platform_type {
             SvsmPlatformType::Native => SvsmPlatformCell::Native(NativePlatform::new()),
             SvsmPlatformType::Snp => SvsmPlatformCell::Snp(SnpPlatform::new()),
+            SvsmPlatformType::Tdp => SvsmPlatformCell::Tdp(TdpPlatform::new()),
         }
     }
 
@@ -99,6 +103,7 @@ impl SvsmPlatformCell {
         match self {
             SvsmPlatformCell::Native(platform) => platform,
             SvsmPlatformCell::Snp(platform) => platform,
+            SvsmPlatformCell::Tdp(platform) => platform,
         }
     }
 
@@ -106,6 +111,7 @@ impl SvsmPlatformCell {
         match self {
             SvsmPlatformCell::Native(platform) => platform,
             SvsmPlatformCell::Snp(platform) => platform,
+            SvsmPlatformCell::Tdp(platform) => platform,
         }
     }
 }
