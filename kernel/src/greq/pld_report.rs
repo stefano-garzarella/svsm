@@ -164,7 +164,7 @@ pub struct AttestationReport {
     /// Guest-provided data
     report_data: [u8; 64],
     /// The measurement calculated at launch
-    measurement: [u8; 48],
+    pub measurement: [u8; 48],
     /// Data provided by the hypervisor at launch
     host_data: [u8; 32],
     /// SHA-384 digest of the ID public key that signed the ID block
