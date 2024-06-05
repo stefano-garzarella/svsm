@@ -78,7 +78,17 @@ pub fn init_svsm_vmsa(vmsa: &mut VMSA, vtom: u64) {
     vmsa.vmpl = 0;
     vmsa.vtom = vtom;
 
-    vmsa.sev_features = sev_flags().as_sev_features();
+    let sev_status = sev_flags();
+
+    if sev_status.contains(SEVStatusFlags::VMSA_REG_PROT) {
+        let nonce = rdrand::RdRand::new()
+            .expect("RDRAND not supported")
+            .try_next_u64()
+            .unwrap();
+        vmsa.reg_prot_nonce = nonce;
+    }
+
+    vmsa.sev_features = sev_status.as_sev_features();
 }
 
 fn real_mode_code_segment(rip: u64) -> VMSASegment {
