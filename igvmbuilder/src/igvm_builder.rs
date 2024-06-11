@@ -380,7 +380,7 @@ impl IgvmBuilder {
             let cpuid_page = SnpCpuidPage::new()?;
             cpuid_page.add_directive(
                 self.gpa_map.cpuid_page.get_start(),
-                COMPATIBILITY_MASK.get(),
+                SNP_COMPATIBILITY_MASK,
                 &mut self.directives,
             );
 
@@ -388,6 +388,7 @@ impl IgvmBuilder {
             self.add_empty_pages(
                 self.gpa_map.secrets_page.get_start(),
                 self.gpa_map.secrets_page.get_size(),
+                SNP_COMPATIBILITY_MASK,
                 IgvmPageDataType::SECRETS,
             )?;
         }
@@ -396,6 +397,7 @@ impl IgvmBuilder {
         self.add_empty_pages(
             self.gpa_map.stage2_free.get_start(),
             self.gpa_map.stage2_free.get_size(),
+            COMPATIBILITY_MASK.get(),
             IgvmPageDataType::NORMAL,
         )?;
 
@@ -427,6 +429,7 @@ impl IgvmBuilder {
         self.add_empty_pages(
             self.gpa_map.low_memory.get_start(),
             self.gpa_map.low_memory.get_size(),
+            COMPATIBILITY_MASK.get(),
             IgvmPageDataType::NORMAL,
         )?;
 
@@ -497,12 +500,13 @@ impl IgvmBuilder {
         &mut self,
         gpa_start: u64,
         size: u64,
+        compatibility_mask: u32,
         data_type: IgvmPageDataType,
     ) -> Result<(), Box<dyn Error>> {
         for gpa in (gpa_start..(gpa_start + size)).step_by(PAGE_SIZE_4K as usize) {
             self.directives.push(IgvmDirectiveHeader::PageData {
                 gpa,
-                compatibility_mask: COMPATIBILITY_MASK.get(),
+                compatibility_mask,
                 flags: IgvmPageDataFlags::new(),
                 data_type,
                 data: vec![],
