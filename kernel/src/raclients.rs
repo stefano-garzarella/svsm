@@ -6,22 +6,12 @@
 
 extern crate alloc;
 
-use alloc::{
-    boxed::Box,
-    format,
-    string::{String, ToString},
-    vec,
-};
-use log::{debug, error, info};
+use alloc::{boxed::Box, format, string::String, vec};
+use log::{error, info};
 use raclients::{
-    client_proxy::{Connection, Error as CPError, Proxy, ProxyRequest, Read, RequestType, Write},
-    client_session::ClientSession,
-    clients::{reference_kbs::ReferenceKBSClientSnp, SnpGeneration},
+    client_proxy::{Connection, Error as CPError, Proxy, Read, Write},
+    in_proxy::client_session::ClientSessionGuest,
 };
-use rand_chacha::rand_core::SeedableRng;
-use rdrand::RdSeed;
-use rsa::{traits::PublicKeyParts, RsaPrivateKey, RsaPublicKey};
-use sha2::{Digest, Sha512};
 
 use crate::{
     greq::{
@@ -37,7 +27,7 @@ pub enum Error {
     AutenticationFailed,
 }
 
-pub fn get_secret(workload_id: &str) -> Result<String, Error> {
+pub fn get_secret() -> Result<String, Error> {
     info!("KBC: Starting remote attestation protocol");
 
     static PROXY_IO: SVSMIOPort = SVSMIOPort::new();
@@ -47,96 +37,56 @@ pub fn get_secret(workload_id: &str) -> Result<String, Error> {
 
     let mut proxy = Proxy::new(Box::new(sp));
 
-    let rdrand = unsafe { RdSeed::new_unchecked() };
-    let mut rng = rand_chacha::ChaChaRng::from_rng(rdrand).unwrap();
-    let priv_key = RsaPrivateKey::new(&mut rng, 2048).expect("failed to generate a key");
-    let pub_key = RsaPublicKey::from(&priv_key);
+    let mut cs = ClientSessionGuest::new();
 
-    let mut snp = ReferenceKBSClientSnp::new(SnpGeneration::Milan, workload_id.to_string());
-    let mut cs = ClientSession::new();
+    let mut snp_report = vec![0; core::mem::size_of::<SnpReportResponse>()];
+    // HACK: extend SnpReportRequest to get user_data slice
+    let user_data = &mut snp_report[..USER_DATA_SIZE];
 
-    info!("KBC: Requesting authentication");
+    info!("KBC: Negotiation");
 
-    let request = cs.request(&snp).unwrap();
+    if let Err(e) = cs.negotiation(&mut proxy, user_data) {
+        error!("KBC: Negotiation failed - {e}");
+        return Err(Error::AutenticationFailed);
+    }
 
-    let challenge = match snp.make(&mut proxy, RequestType::Auth, Some(&request)) {
-        Ok(challenge) => challenge.unwrap(),
-        Err(e) => {
-            error!("KBC: Authentication failed - {e}");
-            return Err(Error::AutenticationFailed);
-        }
-    };
+    info!("KBC: Negotiation done");
 
-    let nonce = cs
-        .challenge(serde_json::from_str(&challenge).unwrap())
-        .unwrap();
+    let user_data_string: String = user_data.iter().map(|v| format!("{v:02x}")).collect();
+    info!("KBC: SNP Report Request - user_data: {user_data_string}");
 
-    info!("KBC: Authentication done");
-    debug!("    nonce: {}", nonce);
+    info!("KBC: Generating attestation report...");
+    let size = get_regular_report(&mut snp_report).unwrap();
+    info!("KBC: Generating attestation report... Done");
 
-    let key_n_encoded = ClientSession::encode_key(pub_key.n()).unwrap();
-    let key_e_encoded = ClientSession::encode_key(pub_key.e()).unwrap();
+    assert_eq!(size, snp_report.len());
 
-    let mut hasher = Sha512::new();
-    hasher.update(nonce.as_bytes());
-    hasher.update(key_n_encoded.as_bytes());
-    hasher.update(key_e_encoded.as_bytes());
-    let user_data = hasher.finalize();
-
-    let mut buf = vec![0; core::mem::size_of::<SnpReportResponse>()];
-    // HACK: extend SnpReportRequest to set user_data
-    buf[..USER_DATA_SIZE].clone_from_slice(&user_data);
-
-    let size = get_regular_report(&mut buf).unwrap();
-    assert_eq!(size, buf.len());
-
-    let response = SnpReportResponse::try_from_as_ref(&buf).unwrap();
+    let response = SnpReportResponse::try_from_as_ref(&snp_report).unwrap();
     let attestation = response.validate().unwrap();
 
     let measurement_string = attestation.measurement.map(|v| format!("{v:02x}")).join("");
     info!("KBC: SNP Launch Measurement: {measurement_string}");
 
-    snp.update_report(unsafe {
+    let report = unsafe {
         core::slice::from_raw_parts(
             (attestation as *const AttestationReport) as *const u8,
             core::mem::size_of::<AttestationReport>(),
         )
-    });
+    };
 
-    info!("KBC: Requesting remote attestation");
+    info!("KBC: Attestation");
 
-    let attestation = cs.attestation(key_n_encoded, key_e_encoded, &snp).unwrap();
-
-    if let Err(e) = snp.make(&mut proxy, RequestType::Attest, Some(&attestation)) {
-        error!("KBC: Attestation failed - {e}");
-        return Err(Error::AutenticationFailed);
-    }
-
-    info!("KBC: Attestation done");
-
-    let ciphertext_encoded = match snp.make(&mut proxy, RequestType::Key, None) {
-        Ok(ce) => ce.unwrap(),
+    let secret = match cs.attestation(&mut proxy, report) {
+        Ok(secret) => secret,
         Err(e) => {
-            error!("Key request failed - {e}");
+            error!("KBC: Attestation failed - {e}");
             return Err(Error::AutenticationFailed);
         }
     };
 
-    info!("KBC: Key successfully received");
+    info!("KBC: Attestation done");
 
-    let ciphertext = cs.secret(ciphertext_encoded, &snp).unwrap();
-    // HACK: reference-kbs & keybroker use RSA to encrypt the secret, so
-    // it can fail if the secret is too big (e.g. RSA key 2048 bits - max
-    // cyphertex 256 bytes)
-    let secret = if ciphertext.len() < 256 {
-        priv_key.decrypt(rsa::Pkcs1v15Encrypt, &ciphertext).unwrap()
-    } else {
-        ciphertext
-    };
-
-    info!("KBC: Key successfully decrypted");
-
-    Ok(String::from_utf8(secret).unwrap())
+    Ok(secret)
 }
 
 impl Write for SerialPort<'_> {

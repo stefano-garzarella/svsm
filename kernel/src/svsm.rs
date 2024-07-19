@@ -453,17 +453,16 @@ pub extern "C" fn svsm_main() {
     }
 
     #[cfg(feature = "raclients")]
-    let nv_state = match raclients::get_secret("svsm") {
-        Ok(secret) => Some(hex::decode(secret).expect("Failed to decode nv_state")),
+    match raclients::get_secret() {
+        Ok(secret) => log::info!("Secret received: {}", secret),
 
         Err(e) => {
             log::error!("Error doing remote attestation: {e:?}");
-            None
         }
     };
 
     #[cfg(all(feature = "mstpm", not(test)))]
-    vtpm_init(nv_state).expect("vTPM failed to initialize");
+    vtpm_init(None).expect("vTPM failed to initialize");
 
     virt_log_usage();
 

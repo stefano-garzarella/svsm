@@ -824,15 +824,20 @@ dependencies = [
 [[package]]
 name = "raclients"
 version = "0.1.0"
-source = "git+https://github.com/stefano-garzarella/RAClients?rev=e9323348dbfc083f7869c1e9849a9b4de4c831a6#e9323348dbfc083f7869c1e9849a9b4de4c831a6"
+source = "git+https://github.com/stefano-garzarella/RAClients?rev=708ff568c15de211f10e58a007adedd253f38c44#708ff568c15de211f10e58a007adedd253f38c44"
 dependencies = [
  "anyhow",
  "base64ct",
  "hex",
  "kbs-types",
+ "log",
  "num-bigint-dig",
+ "rand_chacha",
+ "rdrand",
+ "rsa",
  "serde",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]
@@ -1033,18 +1038,12 @@ dependencies = [
  "elf",
  "gdbstub",
  "gdbstub_arch",
- "hex",
  "igvm_defs",
  "intrusive-collections",
  "libmstpm",
  "log",
  "packit",
  "raclients",
- "rand_chacha",
- "rdrand",
- "rsa",
- "serde_json",
- "sha2",
  "syscall",
  "test",
 ]
