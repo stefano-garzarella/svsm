@@ -30,7 +30,7 @@ gdbstub = { workspace = true, optional = true }
 gdbstub_arch = { workspace = true, optional = true }
 igvm_defs = { workspace = true, features = ["unstable"] }
 intrusive-collections.workspace = true
-log = { workspace = true, features = ["max_level_info", "release_max_level_info"] }
+log = { workspace = true, features = ["max_level_debug", "release_max_level_info"] }
 packit.workspace = true
 libmstpm = { workspace = true, optional = true }
 # raclients dependecies
