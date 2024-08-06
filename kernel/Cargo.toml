@@ -34,6 +34,8 @@ log = { workspace = true, features = ["max_level_info", "release_max_level_info"
 packit.workspace = true
 libmstpm = { workspace = true, optional = true }
 virtio-drivers = { git = "https://github.com/osteffenrh/virtio-drivers", branch = "virtio-pr" }
+serde = { workspace = true, features = ["alloc"] }
+postcard = { workspace = true, features = ["alloc"] }
 
 [target."x86_64-unknown-none".dev-dependencies]
 test.workspace = true
