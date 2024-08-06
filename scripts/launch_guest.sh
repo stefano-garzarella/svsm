@@ -15,6 +15,8 @@ C_BIT_POS=`$SCRIPT_DIR/../utils/cbit`
 DEBUG_SERIAL=""
 QEMU_EXIT_DEVICE=""
 QEMU_TEST_IO_DEVICE=""
+STATE_DEVICE=""
+STATE_ENABLE=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -30,6 +32,13 @@ while [[ $# -gt 0 ]]; do
       ;;
     --image)
       IMAGE="$2"
+      shift
+      shift
+      ;;
+    --state)
+      STATE_ENABLE="x-svsm-virtio-mmio=on"
+      STATE_DEVICE="-global virtio-mmio.force-legacy=false \
+-drive file=$2,format=raw,if=none,id=mmio -device virtio-blk-device,drive=mmio"
       shift
       shift
       ;;
@@ -101,7 +110,7 @@ $SUDO_CMD \
   $QEMU \
     -enable-kvm \
     -cpu EPYC-v4 \
-    -machine $MACHINE \
+    -machine $MACHINE,$STATE_ENABLE \
     -object $MEMORY \
     -object sev-snp-guest,id=sev0,cbitpos=$C_BIT_POS,reduced-phys-bits=1,init-flags=5,igvm-file=$IGVM \
     -smp 4 \
@@ -113,6 +122,7 @@ $SUDO_CMD \
     -serial stdio \
     $DEBUG_SERIAL \
     $QEMU_EXIT_DEVICE \
-    $QEMU_TEST_IO_DEVICE
+    $QEMU_TEST_IO_DEVICE \
+    $STATE_DEVICE
 
 stty intr ^C
