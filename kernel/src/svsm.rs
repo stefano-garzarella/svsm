@@ -452,7 +452,7 @@ pub extern "C" fn svsm_main() {
     initialize_blk(0xfef03000); // Hard-coded in Qemu
 
     #[cfg(all(feature = "mstpm", not(test)))]
-    vtpm_init().expect("vTPM failed to initialize");
+    vtpm_init(false).expect("vTPM failed to initialize");
 
     virt_log_usage();
 
