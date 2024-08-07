@@ -347,7 +347,7 @@ pub extern "C" fn svsm_main() {
     initialize_blk(Some([1; 64]));
 
     #[cfg(all(feature = "vtpm", not(test)))]
-    vtpm_init().expect("vTPM failed to initialize");
+    vtpm_init(false).expect("vTPM failed to initialize");
 
     virt_log_usage();
 
