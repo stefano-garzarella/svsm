@@ -25,18 +25,21 @@ pub trait BlockDriver {
 
 type VirtIOBlkDevice = VirtIOBlk<SvsmHal, MmioTransport<SvsmHal>>;
 
-struct VirtIOBlkDriver(SpinLock<VirtIOBlkDevice>);
+struct VirtIOBlkDriver {
+    device: SpinLock<VirtIOBlkDevice>,
+    mem: PerCPUPageMappingGuard,
+}
 
 impl BlockDriver for VirtIOBlkDriver {
     fn read_blocks(&self, block_id: usize, buf: &mut [u8]) -> Result<(), FsError> {
-        self.0
+        self.device
             .lock()
             .read_blocks(block_id, buf)
             .map_err(|_| FsError::Inval)
     }
 
     fn write_blocks(&self, block_id: usize, buf: &[u8]) -> Result<(), FsError> {
-        self.0
+        self.device
             .lock()
             .write_blocks(block_id, buf)
             .map_err(|_| FsError::Inval)
@@ -59,7 +62,10 @@ pub fn initialize_blk(mmio_base: u64) {
     let transport = unsafe { MmioTransport::<SvsmHal>::new(header).unwrap() };
     let blk: VirtIOBlkDevice = VirtIOBlk::new(transport).expect("Failed to create blk driver");
 
-    *BLOCK_DEVICE.lock_write().deref_mut() = Some(VirtIOBlkDriver(SpinLock::new(blk)));
+    *BLOCK_DEVICE.lock_write().deref_mut() = Some(VirtIOBlkDriver {
+        device: SpinLock::new(blk),
+        mem,
+    });
 }
 
 // Code from https://github.com/rcore-os/rcore-fs/blob/master/rcore-fs/src/dev/mod.rs
