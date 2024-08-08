@@ -113,7 +113,7 @@ $SUDO_CMD \
     -machine $MACHINE,$STATE_ENABLE \
     -object $MEMORY \
     -object sev-snp-guest,id=sev0,cbitpos=$C_BIT_POS,reduced-phys-bits=1,init-flags=5,igvm-file=$IGVM \
-    -smp 4 \
+    -smp 1 \
     -no-reboot \
     -netdev user,id=vmnic -device e1000,netdev=vmnic,romfile= \
     $IMAGE_DISK \
