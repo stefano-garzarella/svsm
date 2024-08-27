@@ -14,15 +14,17 @@ use core::sync::atomic::{AtomicBool, Ordering};
 #[macro_export]
 macro_rules! assert_eq_warn {
     ($left:expr, $right:expr) => {
-        if $left != $right {
-            log::warn!(
-                "Assertion warning failed at {}:{}:{}:\nassertion `left == rigth` failed\n left: {:?}\n right: {:?}",
-                file!(),
-                line!(),
-                column!(),
-                $left,
-                $right
-            );
+        {
+            let left = $left;
+            let right = $right;
+            if left != right {
+                log::warn!(
+                    "Assertion warning failed at {}:{}:{}:\nassertion `left == right` failed\n left: {left:?}\n right: {right:?}",
+                    file!(),
+                    line!(),
+                    column!(),
+                );
+            }
         }
     };
 }
