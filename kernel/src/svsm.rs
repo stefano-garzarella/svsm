@@ -343,7 +343,8 @@ pub extern "C" fn svsm_main() {
         panic!("Failed to prepare guest FW: {e:#?}");
     }
 
-    initialize_blk();
+    // Load the encryption key
+    initialize_blk(Some([1; 64]));
 
     #[cfg(all(feature = "vtpm", not(test)))]
     vtpm_init().expect("vTPM failed to initialize");
