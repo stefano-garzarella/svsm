@@ -449,7 +449,10 @@ pub extern "C" fn svsm_main() {
         prepare_fw_launch(fw_meta).expect("Failed to setup guest VMSA/CAA");
     }
 
-    initialize_blk(0xfef03000); // Hard-coded in Qemu
+    // Load the encryption key
+    let key = [1; 64];
+
+    initialize_blk(0xfef03000, Some(&key)); // Hard-coded in Qemu
 
     #[cfg(all(feature = "mstpm", not(test)))]
     vtpm_init(false).expect("vTPM failed to initialize");
