@@ -455,7 +455,8 @@ pub extern "C" fn svsm_main() {
     let secret = match raclients::get_secret() {
         Ok(secret) => {
             log::info!("Secret received: {}", secret);
-            secret
+            // HACK: hex format required for now
+            hex::decode(secret).unwrap()
         }
         Err(e) => {
             panic!("Error doing remote attestation: {e:?}");
@@ -464,8 +465,7 @@ pub extern "C" fn svsm_main() {
 
     // Load the encryption key
     let mut key = [0; 64];
-    // HACK: we are using only first 64 bytes
-    key[..64].copy_from_slice(secret.as_bytes());
+    key[..64].copy_from_slice(&secret);
 
     initialize_blk(0xfef03000, Some(&key)); // Hard-coded in Qemu
 

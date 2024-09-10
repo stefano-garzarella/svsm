@@ -1086,6 +1086,7 @@ dependencies = [
  "elf",
  "gdbstub",
  "gdbstub_arch",
+ "hex",
  "igvm_defs",
  "intrusive-collections",
  "libmstpm",
