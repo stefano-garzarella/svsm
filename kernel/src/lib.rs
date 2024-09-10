@@ -30,6 +30,8 @@ pub mod locking;
 pub mod mm;
 pub mod platform;
 pub mod protocols;
+#[cfg(feature = "raclients")]
+pub mod raclients;
 pub mod requests;
 pub mod serial;
 pub mod sev;

@@ -43,6 +43,8 @@ use svsm::mm::pagetable::paging_init;
 use svsm::mm::virtualrange::virt_log_usage;
 use svsm::mm::{init_kernel_mapping_info, PerCPUPageMappingGuard};
 use svsm::platform::{SvsmPlatformCell, SVSM_PLATFORM};
+#[cfg(feature = "raclients")]
+use svsm::raclients;
 use svsm::requests::{request_loop, request_processing_main, update_mappings};
 use svsm::sev::utils::{rmp_adjust, RMPFlags};
 use svsm::sev::{secrets_page, secrets_page_mut};
@@ -449,8 +451,21 @@ pub extern "C" fn svsm_main() {
         prepare_fw_launch(fw_meta).expect("Failed to setup guest VMSA/CAA");
     }
 
+    #[cfg(feature = "raclients")]
+    let secret = match raclients::get_secret() {
+        Ok(secret) => {
+            log::info!("Secret received: {}", secret);
+            secret
+        }
+        Err(e) => {
+            panic!("Error doing remote attestation: {e:?}");
+        }
+    };
+
     // Load the encryption key
-    let key = [1; 64];
+    let mut key = [0; 64];
+    // HACK: we are using only first 64 bytes
+    key[..64].copy_from_slice(secret.as_bytes());
 
     initialize_blk(0xfef03000, Some(&key)); // Hard-coded in Qemu
 

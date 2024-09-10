@@ -47,6 +47,8 @@ uuid = "1.6.1"
 zerocopy = { version = "0.7.32", features = ["derive"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 postcard = { version = "1.0", default-features = false }
+# RAClients
+raclients = { git = "https://github.com/stefano-garzarella/RAClients", rev ="708ff568c15de211f10e58a007adedd253f38c44", version = "0.1.0", default-features = false }
 
 # other repos
 packit = { git = "https://github.com/coconut-svsm/packit", version = "0.1.1" }
