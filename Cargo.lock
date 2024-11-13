@@ -155,7 +155,7 @@ dependencies = [
 name = "bootlib"
 version = "0.1.0"
 dependencies = [
- "zerocopy 0.8.2",
+ "zerocopy 0.8.9",
 ]
 
 [[package]]
@@ -248,7 +248,7 @@ name = "cpuarch"
 version = "0.1.0"
 dependencies = [
  "bitfield-struct",
- "zerocopy 0.8.2",
+ "zerocopy 0.8.9",
 ]
 
 [[package]]
@@ -522,7 +522,7 @@ dependencies = [
  "igvm_defs",
  "uuid",
  "zerocopy 0.7.34",
- "zerocopy 0.8.2",
+ "zerocopy 0.8.9",
 ]
 
 [[package]]
@@ -535,7 +535,7 @@ dependencies = [
  "p384",
  "sha2",
  "zerocopy 0.7.34",
- "zerocopy 0.8.2",
+ "zerocopy 0.8.9",
 ]
 
 [[package]]
@@ -912,7 +912,7 @@ dependencies = [
  "syscall",
  "tdx-tdcall",
  "test",
- "zerocopy 0.8.2",
+ "zerocopy 0.8.9",
 ]
 
 [[package]]
@@ -1167,11 +1167,11 @@ dependencies = [
 
 [[package]]
 name = "zerocopy"
-version = "0.8.2"
+version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdf8d0ac51277f0e70d6dcb000b7bfa817968d66df9f5772e731a1d1bc6fc5c6"
+checksum = "f49e690f8f352f4a9ee8679a8c5921f42ffd0d6d6413a0a66b8e81cf524e109c"
 dependencies = [
- "zerocopy-derive 0.8.2",
+ "zerocopy-derive 0.8.9",
 ]
 
 [[package]]
@@ -1187,9 +1187,9 @@ dependencies = [
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.2"
+version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cf1fea9437ee18b719f41c597b00c1745d7ff77184daf6ac8c61110a0115161"
+checksum = "fa732fcc881df7a6fbe8e3ed17baadece53b379ad58fe2633396b1a2b108a7b1"
 dependencies = [
  "proc-macro2",
  "quote",
