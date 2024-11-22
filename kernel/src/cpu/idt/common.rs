@@ -74,9 +74,10 @@ impl X86ExceptionContext {
         self.frame.rip = new_rip;
 
         if is_cet_ss_supported() {
-            // Update the instruction pointer on the shadow stack.
             let return_on_stack = (self.ssp + 8) as *const usize;
             let return_on_stack_val = new_rip;
+            // SAFETY: Inline assembly to update the instruction pointer on
+            // the shadow stack.
             unsafe {
                 asm!(
                     "wrssq [{}], {}",
@@ -348,6 +349,8 @@ impl WriteLockGuard<'static, IDT> {
             address: VirtAddr::from(self.entries.as_ptr()),
         };
 
+        // SAFETY: Inline assembly to load an IDT. `'static` lifetime ensures
+        // that address is always available for the CPU.
         unsafe {
             asm!("lidt (%rax)", in("rax") &desc, options(att_syntax));
         }
@@ -378,6 +381,7 @@ pub fn triple_fault() {
         address: VirtAddr::from(0u64),
     };
 
+    // SAFETY: Inline assembly to load an invalid IDT to trigger a triple fault.
     unsafe {
         asm!("lidt (%rax)
               int3", in("rax") &desc, options(att_syntax));
