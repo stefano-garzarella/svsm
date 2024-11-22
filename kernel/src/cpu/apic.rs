@@ -244,6 +244,9 @@ impl LocalApic {
         // (core_remap_ca(), core_create_vcpu() or prepare_fw_launch()) so
         // they're safe to use.
         if let Ok(caa) = unsafe { calling_area.read() } {
+            // SAFETY: guest vmsa and ca are always validated before beeing updated
+            // (core_remap_ca(), core_create_vcpu() or prepare_fw_launch()) so
+            // they're safe to use.
             let _ = unsafe { calling_area.write(caa.update_no_eoi_required(0)) };
         }
         Some(calling_area)
@@ -370,6 +373,9 @@ impl LocalApic {
                         // (core_remap_ca(), core_create_vcpu() or prepare_fw_launch())
                         // so they're safe to use.
                         if let Ok(caa) = unsafe { calling_area.read() } {
+                            // SAFETY: guest vmsa and ca are always validated before beeing upated
+                            // (core_remap_ca(), core_create_vcpu() or prepare_fw_launch())
+                            // so they're safe to use.
                             if unsafe { calling_area.write(caa.update_no_eoi_required(1)).is_ok() }
                             {
                                 // Only track a pending lazy EOI if the
