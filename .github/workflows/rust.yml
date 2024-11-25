@@ -114,7 +114,7 @@ jobs:
           args: --all -- --check --config "format_code_in_doc_comments=true"
 
   unsafe-check:
-    name: Check of undocumented unsafe code blocks
+    name: Check unsafe blocks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -144,11 +144,17 @@ jobs:
         run: |
           cargo clippy --workspace --all-features --exclude packit --exclude svsm-fuzz --exclude igvmbuilder --exclude igvmmeasure -- -W clippy::undocumented_unsafe_blocks 2> clippy_warnings_pr.txt
 
+      - name: Upload PR warnings artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: clippy-warnings-pr
+          path: clippy_warnings_pr.txt
+
       - name: Checkout
         uses: actions/checkout@v3
         with:
           submodules: recursive
-          ref: main
+          ref: ${{ github.event.pull_request.base.sha }}
 
       # ubuntu-latest does not have binutils 2.39, which we need for
       # ld to work, so build all the objects without performing the
@@ -156,19 +162,24 @@ jobs:
       - name: Build
         run: make FEATURES="default,enable-gdb" bin/svsm-kernel.elf stage1/stage1.o stage1/reset.o
 
-      - name: Clippy with undocumented_unsafe_blocks for main branch
+      - name: Clippy with undocumented_unsafe_blocks for base branch
         run: |
-          cargo clippy --workspace --all-features --exclude packit --exclude svsm-fuzz --exclude igvmbuilder --exclude igvmmeasure -- -W clippy::undocumented_unsafe_blocks 2> clippy_warnings_main.txt
+          cargo clippy --workspace --all-features --exclude packit --exclude svsm-fuzz --exclude igvmbuilder --exclude igvmmeasure -- -W clippy::undocumented_unsafe_blocks 2> clippy_warnings_base.txt
 
-      - name: Compare undocumented unsafe blocks in this PR with the main branch
+      - name: Download PR warnings artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: clippy-warnings-pr
+
+      - name: Compare undocumented unsafe blocks
         run: |
-          PR_WARNINGS=$(wc -l < clippy_warnings_pr.txt)
-          MAIN_WARNINGS=$(wc -l < clippy_warnings_main.txt)
+          PR_WARNINGS=$(grep 'missing a safety comment' clippy_warnings_pr.txt | wc -l)
+          BASE_WARNINGS=$(grep 'missing a safety comment' clippy_warnings_base.txt | wc -l)
 
-          echo "Undocumented unsafe code blocks [PR: $PR_WARNINGS main: $MAIN_WARNINGS]"
+          echo "Undocumented unsafe code blocks [PR: $PR_WARNINGS base: $BASE_WARNINGS]"
 
-          if  "$UNSAFE_PR" -gt "$UNSAFE_MAIN" ]; then
-            echo "New undocumented unsafe code blocks detected in this PR."
+          if [ "$PR_WARNINGS" -gt "$BASE_WARNINGS" ]; then
+            echo "$(($PR_WARNINGS - $BASE_WARNINGS)) new undocumented unsafe code blocks detected in this PR."
             exit 1
           fi
 
