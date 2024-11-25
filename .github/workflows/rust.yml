@@ -112,3 +112,63 @@ jobs:
         with:
           command: fmt
           args: --all -- --check --config "format_code_in_doc_comments=true"
+
+  unsafe-check:
+    name: Check of undocumented unsafe code blocks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Install specified rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+            toolchain: '1.82.0'
+            target: x86_64-unknown-none
+            profile: minimal
+            override: true
+            components: rustfmt, rust-src, clippy
+
+      - name: Install TPM 2.0 Reference Implementation build dependencies
+        run: sudo apt install -y autoconf autoconf-archive pkg-config build-essential automake
+
+      # ubuntu-latest does not have binutils 2.39, which we need for
+      # ld to work, so build all the objects without performing the
+      # final linking step.
+      - name: Build
+        run: make FEATURES="default,enable-gdb" bin/svsm-kernel.elf stage1/stage1.o stage1/reset.o
+
+      - name: Clippy with undocumented_unsafe_blocks for PR branch
+        run: |
+          cargo clippy --workspace --all-features --exclude packit --exclude svsm-fuzz --exclude igvmbuilder --exclude igvmmeasure -- -W clippy::undocumented_unsafe_blocks 2> clippy_warnings_pr.txt
+
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+          ref: main
+
+      # ubuntu-latest does not have binutils 2.39, which we need for
+      # ld to work, so build all the objects without performing the
+      # final linking step.
+      - name: Build
+        run: make FEATURES="default,enable-gdb" bin/svsm-kernel.elf stage1/stage1.o stage1/reset.o
+
+      - name: Clippy with undocumented_unsafe_blocks for main branch
+        run: |
+          cargo clippy --workspace --all-features --exclude packit --exclude svsm-fuzz --exclude igvmbuilder --exclude igvmmeasure -- -W clippy::undocumented_unsafe_blocks 2> clippy_warnings_main.txt
+
+      - name: Compare undocumented unsafe blocks in this PR with the main branch
+        run: |
+          PR_WARNINGS=$(wc -l < clippy_warnings_pr.txt)
+          MAIN_WARNINGS=$(wc -l < clippy_warnings_main.txt)
+
+          echo "Undocumented unsafe code blocks [PR: $PR_WARNINGS main: $MAIN_WARNINGS]"
+
+          if  "$UNSAFE_PR" -gt "$UNSAFE_MAIN" ]; then
+            echo "New undocumented unsafe code blocks detected in this PR."
+            exit 1
+          fi
+
