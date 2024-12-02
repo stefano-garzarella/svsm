@@ -141,6 +141,10 @@ fn copy_secrets_page_to_fw(fw_addr: PhysAddr, caa_addr: PhysAddr) -> Result<(), 
         fw_secrets_page.copy_to(start);
     }
 
+    unsafe {
+        fw_secrets_page.copy_to(start);
+    }
+
     Ok(())
 }
 
