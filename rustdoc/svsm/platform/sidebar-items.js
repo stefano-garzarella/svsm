@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PageStateChangeOp","PageValidateOp","SvsmPlatformCell"],"fn":["halt","init_platform_type"],"mod":["guest_cpu","native","snp","tdp"],"static":["SVSM_PLATFORM","SVSM_PLATFORM_TYPE"],"struct":["PageEncryptionMasks"],"trait":["SvsmPlatform"]};
