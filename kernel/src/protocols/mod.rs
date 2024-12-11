@@ -9,6 +9,7 @@ pub mod core;
 pub mod errors;
 #[cfg(all(feature = "vtpm", not(test)))]
 pub mod vtpm;
+pub mod custom;
 
 use cpuarch::vmsa::{GuestVMExit, VMSA};
 
@@ -16,6 +17,7 @@ use cpuarch::vmsa::{GuestVMExit, VMSA};
 pub const SVSM_CORE_PROTOCOL: u32 = 0;
 pub const SVSM_VTPM_PROTOCOL: u32 = 2;
 pub const SVSM_APIC_PROTOCOL: u32 = 3;
+pub const SVSM_CUSTOM_PROTOCOL: u32 = 42;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct RequestParams {

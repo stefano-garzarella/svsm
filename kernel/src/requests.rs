@@ -21,6 +21,9 @@ use crate::types::GUEST_VMPL;
 use crate::utils::halt;
 use cpuarch::vmsa::GuestVMExit;
 
+use crate::protocols::SVSM_CUSTOM_PROTOCOL;
+use crate::protocols::custom::custom_protocol_request;
+
 /// The SVSM Calling Area (CAA)
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
@@ -111,6 +114,7 @@ fn request_loop_once(
         #[cfg(all(feature = "vtpm", not(test)))]
         SVSM_VTPM_PROTOCOL => vtpm_protocol_request(request, params).map(|_| true),
         SVSM_APIC_PROTOCOL => apic_protocol_request(request, params).map(|_| true),
+        SVSM_CUSTOM_PROTOCOL => custom_protocol_request(request, params).map(|_| true),
         _ => Err(SvsmReqError::unsupported_protocol()),
     }
 }
