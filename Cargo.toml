@@ -30,6 +30,8 @@ members = [
     "virtio-drivers",
     # Library defining common types between SVSM and attestation proxy
     "libaproxy",
+    # Attestation proxy
+    "aproxy",
 ]
 
 
