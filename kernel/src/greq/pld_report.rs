@@ -32,7 +32,7 @@ pub struct SnpReportRequest {
     ///        3: Reserved
     pub flags: u32,
     /// Reserved, must be zero
-    rsvd: [u8; 24],
+    pub rsvd: [u8; 24],
 }
 
 impl SnpReportRequest {
@@ -125,7 +125,7 @@ struct Signature {
 
 /// ATTESTATION_REPORT format (AMD SEV-SNP spec. table 21)
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug, FromBytes, Immutable, IntoBytes, KnownLayout)]
+#[derive(Clone, Copy, Debug, FromBytes, KnownLayout, Immutable, IntoBytes)]
 pub struct AttestationReport {
     /// Version number of this attestation report
     version: u32,
