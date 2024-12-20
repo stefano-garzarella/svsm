@@ -18,7 +18,7 @@ use super::SYS_CLOSE;
 pub struct ObjHandle(u32);
 
 impl ObjHandle {
-    pub(crate) fn new(id: u32) -> Self {
+    pub(crate) const fn new(id: u32) -> Self {
         Self(id)
     }
 }
@@ -36,6 +36,7 @@ pub trait Obj {
 
 impl Drop for ObjHandle {
     fn drop(&mut self) {
+        // SAFETY: SYS_CLOSE is supported syscall number by the svsm kernel.
         unsafe {
             let _ = syscall1(SYS_CLOSE, self.0.into());
         }

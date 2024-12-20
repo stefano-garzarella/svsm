@@ -16,6 +16,8 @@ const INVLPGB_VALID_GLOBAL: u64 = 1u64 << 3;
 
 #[inline]
 fn do_invlpgb(rax: u64, rcx: u64, rdx: u64) {
+    // SAFETY: Inline assembly to invalidate TLB Entries, which does not change
+    // any state related to memory safety.
     unsafe {
         asm!("invlpgb",
              in("rax") rax,
@@ -27,6 +29,8 @@ fn do_invlpgb(rax: u64, rcx: u64, rdx: u64) {
 
 #[inline]
 fn do_tlbsync() {
+    // SAFETY: Inline assembly to synchronize TLB invalidations. It does not
+    // change any state.
     unsafe {
         asm!("tlbsync", options(att_syntax));
     }
@@ -54,12 +58,18 @@ pub fn flush_tlb_global_sync() {
 
 pub fn flush_tlb_global_percpu() {
     let cr4 = read_cr4();
-    write_cr4(cr4 ^ CR4Flags::PGE);
-    write_cr4(cr4);
+
+    // SAFETY: we are not changing any execution-state relevant flags
+    unsafe {
+        write_cr4(cr4 ^ CR4Flags::PGE);
+        write_cr4(cr4);
+    }
 }
 
 pub fn flush_address_percpu(va: VirtAddr) {
     let va: u64 = va.page_align().bits() as u64;
+    // SAFETY: Inline assembly to invalidate TLB Entries, which does not change
+    // any state related to memory safety.
     unsafe {
         asm!("invlpg (%rax)",
              in("rax") va,

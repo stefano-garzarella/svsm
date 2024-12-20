@@ -9,7 +9,7 @@
 
 pub mod boot_stage2;
 
-use bootlib::kernel_launch::{KernelLaunchInfo, Stage2LaunchInfo};
+use bootlib::kernel_launch::{KernelLaunchInfo, Stage2LaunchInfo, STAGE2_START};
 use bootlib::platform::SvsmPlatformType;
 use core::arch::asm;
 use core::panic::PanicInfo;
@@ -21,7 +21,7 @@ use svsm::address::{Address, PhysAddr, VirtAddr};
 use svsm::config::SvsmConfig;
 use svsm::console::install_console_logger;
 use svsm::cpu::cpuid::{dump_cpuid_table, register_cpuid_table};
-use svsm::cpu::gdt;
+use svsm::cpu::gdt::GLOBAL_GDT;
 use svsm::cpu::idt::stage2::{early_idt_init, early_idt_init_no_ghcb};
 use svsm::cpu::percpu::{this_cpu, PerCpu};
 use svsm::error::SvsmError;
@@ -84,7 +84,7 @@ fn setup_env(
     platform: &mut dyn SvsmPlatform,
     launch_info: &Stage2LaunchInfo,
 ) {
-    gdt().load();
+    GLOBAL_GDT.load();
     early_idt_init_no_ghcb();
 
     let debug_serial_port = config.debug_serial_port();
@@ -94,9 +94,9 @@ fn setup_env(
         .expect("Early environment setup failed");
 
     let kernel_mapping = FixedAddressMappingRange::new(
-        VirtAddr::from(0x808000u64),
-        VirtAddr::from(launch_info.stage2_end as u64),
-        PhysAddr::from(0x808000u64),
+        VirtAddr::from(u64::from(STAGE2_START)),
+        VirtAddr::from(u64::from(launch_info.stage2_end)),
+        PhysAddr::from(u64::from(STAGE2_START)),
     );
 
     // Use the low 640 KB of memory as the heap.

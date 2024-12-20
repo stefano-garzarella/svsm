@@ -45,6 +45,7 @@ impl SvsmPlatform for TdpPlatform {
     }
 
     fn env_setup(&mut self, debug_serial_port: u16, vtom: usize) -> Result<(), SvsmError> {
+        assert_ne!(vtom, 0);
         VTOM.init(&vtom).map_err(|_| SvsmError::PlatformInit)?;
         // Serial console device can be initialized immediately
         init_svsm_console(&GHCI_IO_DRIVER, debug_serial_port)
@@ -111,6 +112,7 @@ impl SvsmPlatform for TdpPlatform {
             return Err(SvsmError::InvalidAddress);
         }
         match op {
+            // SAFETY: safety work on the address is yet to be completed.
             PageValidateOp::Validate => unsafe {
                 // TODO - verify safety of the physical address range.
                 td_accept_physical_memory(region)
@@ -136,6 +138,7 @@ impl SvsmPlatform for TdpPlatform {
             return Err(SvsmError::InvalidAddress);
         }
         match op {
+            // SAFETY: safety work on the address is yet to be completed.
             PageValidateOp::Validate => unsafe {
                 // TODO - verify safety of the physical address range.
                 td_accept_virtual_memory(region)

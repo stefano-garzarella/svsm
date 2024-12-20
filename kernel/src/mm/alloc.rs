@@ -7,13 +7,14 @@
 use crate::address::{Address, PhysAddr, VirtAddr};
 use crate::cpu::mem::{copy_bytes, write_bytes};
 use crate::error::SvsmError;
+use crate::fs::Buffer;
 use crate::locking::SpinLock;
 use crate::mm::virt_to_phys;
 use crate::types::{PAGE_SHIFT, PAGE_SIZE};
 use crate::utils::{align_down, align_up, zero_mem_region};
 use core::alloc::{GlobalAlloc, Layout};
 use core::mem::size_of;
-use core::ptr;
+use core::{cmp, ptr, slice};
 
 #[cfg(any(test, fuzzing))]
 use crate::locking::LockGuard;
@@ -589,7 +590,12 @@ impl MemoryRegion {
     fn allocate_zeroed_page(&mut self) -> Result<VirtAddr, AllocError> {
         let vaddr = self.allocate_page()?;
 
-        zero_mem_region(vaddr, vaddr + PAGE_SIZE);
+        // SAFETY: we trust allocate_page() to return a pointer to a valid
+        // page. vaddr + PAGE_SIZE also correctly points to the end of the
+        // page.
+        unsafe {
+            zero_mem_region(vaddr, vaddr + PAGE_SIZE);
+        }
 
         Ok(vaddr)
     }
@@ -972,6 +978,75 @@ impl PageRef {
         }
     }
 
+    /// Write to page from [`Buffer`] object
+    ///
+    /// Arguments:
+    ///
+    /// - `buffer`: Reference to buffer object.
+    /// - `buffer_offset`: Offset into the buffer to start writing from.
+    /// - `page_offset`: Offset into the page where to start writing to.
+    /// - `size`: Number of bytes to copy. `page_offset + size` must be `<=
+    //     PAGE_SIZE`.
+    ///
+    /// # Returns:
+    ///
+    /// Number of bytes written on success, [`SvsmError`] on failure.
+    pub fn copy_from_buffer(
+        &self,
+        buffer: &dyn Buffer,
+        buffer_offset: usize,
+        page_offset: usize,
+        size: usize,
+    ) -> Result<usize, SvsmError> {
+        assert!(page_offset.checked_add(size).unwrap() <= PAGE_SIZE);
+        assert!(buffer_offset.checked_add(size).unwrap() <= buffer.size());
+
+        let safe_size = cmp::min(PAGE_SIZE - page_offset, size);
+
+        // SAFETY: The calculations and asserts above make sure no data is
+        // written outside of the page boundaries.
+        let dst_slice: &mut [u8] = unsafe {
+            slice::from_raw_parts_mut(
+                self.virt_addr.const_add(page_offset).as_mut_ptr(),
+                safe_size,
+            )
+        };
+        buffer.read_buffer(dst_slice, buffer_offset)
+    }
+
+    /// Read from page to [`Buffer`] object
+    ///
+    /// Arguments:
+    ///
+    /// - `buffer`: Reference to buffer object.
+    /// - `buffer_offset`: Offset into the buffer to start writing to.
+    /// - `page_offset`: Offset into the page where to start reading from.
+    /// - `size`: Number of bytes to copy. `page_offset + size` must be `<=
+    //     PAGE_SIZE`.
+    ///
+    /// # Returns:
+    ///
+    /// Number of bytes read on success, [`SvsmError`] on failure.
+    pub fn copy_to_buffer(
+        &self,
+        buffer: &mut dyn Buffer,
+        buffer_offset: usize,
+        page_offset: usize,
+        size: usize,
+    ) -> Result<usize, SvsmError> {
+        assert!(page_offset.checked_add(size).unwrap() <= PAGE_SIZE);
+        assert!(buffer_offset.checked_add(size).unwrap() <= buffer.size());
+
+        let safe_size = cmp::min(PAGE_SIZE - page_offset, size);
+
+        // SAFETY: The calculations and asserts above make sure no data is read
+        // outside of the page boundaries.
+        let src_slice: &[u8] = unsafe {
+            slice::from_raw_parts(self.virt_addr.const_add(page_offset).as_ptr(), safe_size)
+        };
+        buffer.write_buffer(src_slice, buffer_offset)
+    }
+
     pub fn fill(&self, offset: usize, value: u8) {
         let dst = self.virt_addr.bits() + offset;
         let size = PAGE_SIZE.checked_sub(offset).unwrap();
@@ -1091,7 +1166,14 @@ pub fn allocate_zeroed_page() -> Result<VirtAddr, SvsmError> {
 /// `SvsmError` if allocation fails.
 pub fn allocate_file_page() -> Result<VirtAddr, SvsmError> {
     let vaddr = ROOT_MEM.lock().allocate_file_page()?;
-    zero_mem_region(vaddr, vaddr + PAGE_SIZE);
+
+    // SAFETY: we trust allocate_file_page() to return a pointer to a valid
+    // page. vaddr + PAGE_SIZE also correctly points to the end of the
+    // page.
+    unsafe {
+        zero_mem_region(vaddr, vaddr + PAGE_SIZE);
+    }
+
     Ok(vaddr)
 }
 

@@ -6,7 +6,7 @@
 
 extern crate alloc;
 
-use super::gdt_mut;
+use super::gdt::GDT;
 use super::isst::Isst;
 use super::msr::write_msr;
 use super::shadow_stack::{is_cet_ss_supported, ISST_ADDR};
@@ -48,6 +48,7 @@ use crate::types::{
     PAGE_SHIFT, PAGE_SHIFT_2M, PAGE_SIZE, PAGE_SIZE_2M, SVSM_TR_ATTRIBUTES, SVSM_TSS,
 };
 use crate::utils::MemoryRegion;
+use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::cell::{Cell, OnceCell, Ref, RefCell, RefMut, UnsafeCell};
@@ -325,7 +326,7 @@ pub struct PerCpu {
     irq_state: IrqState,
 
     pgtbl: RefCell<Option<&'static mut PageTable>>,
-    tss: Cell<X86Tss>,
+    tss: X86Tss,
     isst: Cell<Isst>,
     svsm_vmsa: OnceCell<VmsaPage>,
     reset_ip: Cell<u64>,
@@ -365,7 +366,7 @@ impl PerCpu {
         Self {
             pgtbl: RefCell::new(None),
             irq_state: IrqState::new(),
-            tss: Cell::new(X86Tss::new()),
+            tss: X86Tss::new(),
             isst: Cell::new(Isst::default()),
             svsm_vmsa: OnceCell::new(),
             reset_ip: Cell::new(0xffff_fff0),
@@ -428,13 +429,58 @@ impl PerCpu {
         self.irq_state.enable();
     }
 
+    /// Increments IRQ-disable nesting level on the current CPU without
+    /// disabling interrupts.  This is used by exception and interrupt dispatch
+    /// routines that have already disabled interrupts.
+    ///
+    /// Caller needs to make sure to match every `push_nesting()` call with a
+    /// `pop_nesting()` call.
+    #[inline(always)]
+    pub fn irqs_push_nesting(&self, was_enabled: bool) {
+        self.irq_state.push_nesting(was_enabled);
+    }
+
+    /// Reduces IRQ-disable nesting level on the current CPU without restoring
+    /// the original IRQ state original IRQ state.  This is used by exception
+    /// and interrupt dispatch routines that will restore interrupt state
+    /// naturally.
+    ///
+    /// Caller needs to make sure to match every `disable()` call with a
+    /// `pop_state()` call.
+    #[inline(always)]
+    pub fn irqs_pop_nesting(&self) {
+        let _ = self.irq_state.pop_nesting();
+    }
+
     /// Get IRQ-disable nesting count on the current CPU
     ///
     /// # Returns
     ///
     /// Current nesting depth of irq_disable() calls.
-    pub fn irq_nesting_count(&self) -> isize {
+    pub fn irq_nesting_count(&self) -> i32 {
         self.irq_state.count()
+    }
+
+    /// Raises TPR on the current CPU.  Keeps track of the nesting level.
+    ///
+    /// The caller must ensure that every `raise_tpr()` call is followed by a
+    /// matching call to `lower_tpr()`.
+    #[inline(always)]
+    pub fn raise_tpr(&self, tpr_value: usize) {
+        self.irq_state.raise_tpr(tpr_value);
+    }
+
+    /// Lowers TPR from the current level to the new level required by the
+    /// current nesting state.
+    ///
+    /// The caller must ensure that a `lower_tpr()` call balances a preceding
+    /// `raise_tpr()` call to the indicated level.
+    ///
+    /// * `tpr_value` - The TPR from which the caller would like to lower.
+    ///   Must be less than or equal to the current TPR.
+    #[inline(always)]
+    pub fn lower_tpr(&self, tpr_value: usize) {
+        self.irq_state.lower_tpr(tpr_value);
     }
 
     /// Sets up the CPU-local GHCB page.
@@ -466,7 +512,7 @@ impl PerCpu {
         // to ensure that only a single reference can ever be taken at a time.
         let page_ref: RefMut<'_, Option<(VirtPhysPair, VirtPhysPair)>> =
             self.hypercall_pages.borrow_mut();
-        // SAFETY - the virtual addresses were allocated when the hypercall
+        // SAFETY: the virtual addresses were allocated when the hypercall
         // pages were configured, and the physical addresses were captured at
         // that time.
         unsafe { HypercallPagesGuard::new(RefMut::map(page_ref, |o| o.as_mut().unwrap())) }
@@ -474,6 +520,12 @@ impl PerCpu {
 
     pub fn hv_doorbell(&self) -> Option<&'static HVDoorbell> {
         self.hv_doorbell.get()
+    }
+
+    pub fn process_hv_events_if_required(&self) {
+        if let Some(doorbell) = self.hv_doorbell.get() {
+            doorbell.process_if_required(&self.irq_state);
+        }
     }
 
     /// Gets a pointer to the location of the HV doorbell pointer in the
@@ -625,9 +677,10 @@ impl PerCpu {
 
     fn setup_tss(&self) {
         let double_fault_stack = self.get_top_of_df_stack();
-        let mut tss = self.tss.get();
-        tss.set_ist_stack(IST_DF, double_fault_stack);
-        self.tss.set(tss);
+        // SAFETY: the stck pointer is known to be correct.
+        unsafe {
+            self.tss.set_ist_stack(IST_DF, double_fault_stack);
+        }
     }
 
     fn setup_isst(&self) {
@@ -733,24 +786,16 @@ impl PerCpu {
     }
 
     pub fn setup_idle_task(&self, entry: extern "C" fn()) -> Result<(), SvsmError> {
-        let idle_task = Task::create(self, entry)?;
+        let idle_task = Task::create(self, entry, String::from("idle"))?;
         self.runqueue.lock_read().set_idle_task(idle_task);
         Ok(())
     }
 
-    pub fn load_pgtable(&self) {
-        self.get_pgtable().load();
-    }
-
     pub fn load_tss(&self) {
-        // SAFETY: this can only produce UB if someone else calls self.tss.set
-        // () while this new reference is alive, which cannot happen as this
-        // data is local to this CPU. We need to get a reference to the value
-        // inside the Cell because the address of the TSS will be used. If we
-        // did self.tss.get(), then the address of a temporary copy would be
-        // used.
-        let tss = unsafe { &*self.tss.as_ptr() };
-        gdt_mut().load_tss(tss);
+        // Create a temporary GDT to use to configure the TSS.
+        let mut gdt = GDT::new();
+        gdt.load();
+        gdt.load_tss(&self.tss);
     }
 
     pub fn load_isst(&self) {
@@ -759,7 +804,9 @@ impl PerCpu {
     }
 
     pub fn load(&self) {
-        self.load_pgtable();
+        // SAFETY: along with the page table we are also uploading the right
+        // TSS and ISST to ensure a memory safe execution state
+        unsafe { self.get_pgtable().load() };
         self.load_tss();
         if is_cet_ss_supported() {
             self.load_isst();
@@ -813,7 +860,7 @@ impl PerCpu {
             return Err(SvsmError::Mem);
         }
 
-        let mut vmsa = VmsaPage::new(RMPFlags::GUEST_VMPL)?;
+        let mut vmsa = VmsaPage::new(RMPFlags::VMPL1)?;
         let paddr = vmsa.paddr();
 
         // Initialize VMSA
@@ -1035,10 +1082,15 @@ impl PerCpu {
         self.runqueue.lock_read().current_task()
     }
 
-    pub fn set_tss_rsp0(&self, addr: VirtAddr) {
-        let mut tss = self.tss.get();
-        tss.stacks[0] = addr;
-        self.tss.set(tss);
+    /// # Safety
+    /// No checks are performed on the stack address.  The caller must
+    /// ensure that the address is valid for stack usage.
+    pub unsafe fn set_tss_rsp0(&self, addr: VirtAddr) {
+        // SAFETY: the caller has guaranteed the correctness of the stack
+        // pointer.
+        unsafe {
+            self.tss.set_rsp0(addr);
+        }
     }
 }
 
@@ -1075,8 +1127,30 @@ pub fn irqs_enable() {
 /// # Returns
 ///
 /// Current nesting depth of irq_disable() calls.
-pub fn irq_nesting_count() -> isize {
+pub fn irq_nesting_count() -> i32 {
     this_cpu().irq_nesting_count()
+}
+
+/// Raises TPR on the current CPU.  Keeps track of the nesting level.
+///
+/// The caller must ensure that every `raise_tpr()` call is followed by a
+/// matching call to `lower_tpr()`.
+#[inline(always)]
+pub fn raise_tpr(tpr_value: usize) {
+    this_cpu().raise_tpr(tpr_value);
+}
+
+/// Lowers TPR from the current level to the new level required by the
+/// current nesting state.
+///
+/// The caller must ensure that a `lower_tpr()` call balances a preceding
+/// `raise_tpr()` call to the indicated level.
+///
+/// * `tpr_value` - The TPR from which the caller would like to lower.
+///   Must be less than or equal to the current TPR.
+#[inline(always)]
+pub fn lower_tpr(tpr_value: usize) {
+    this_cpu().lower_tpr(tpr_value);
 }
 
 /// Gets the GHCB for this CPU.

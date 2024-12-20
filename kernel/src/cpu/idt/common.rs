@@ -9,7 +9,7 @@ extern crate alloc;
 use crate::address::{Address, VirtAddr};
 use crate::cpu::control_regs::{read_cr0, read_cr4};
 use crate::cpu::efer::read_efer;
-use crate::cpu::gdt::gdt;
+use crate::cpu::gdt::GLOBAL_GDT;
 use crate::cpu::registers::{X86GeneralRegs, X86InterruptFrame};
 use crate::cpu::shadow_stack::is_cet_ss_supported;
 use crate::insn_decode::{InsnError, InsnMachineCtx, InsnMachineMem, Register, SegRegister};
@@ -70,13 +70,20 @@ pub struct X86ExceptionContext {
 }
 
 impl X86ExceptionContext {
-    pub fn set_rip(&mut self, new_rip: usize) {
+    /// # Safety
+    ///
+    /// The caller must ensure to update the rest of the execution state as
+    /// actual hardware would have done it (e.g. for MMIO emulation, CPUID,
+    /// MSR, etc.).
+    pub unsafe fn set_rip(&mut self, new_rip: usize) {
         self.frame.rip = new_rip;
 
         if is_cet_ss_supported() {
-            // Update the instruction pointer on the shadow stack.
             let return_on_stack = (self.ssp + 8) as *const usize;
             let return_on_stack_val = new_rip;
+            // SAFETY: Inline assembly to update the instruction pointer on
+            // the shadow stack. The safety of the RIP value is delegated to
+            // the caller of this function which is unsafe.
             unsafe {
                 asm!(
                     "wrssq [{}], {}",
@@ -95,8 +102,8 @@ impl InsnMachineCtx for X86ExceptionContext {
 
     fn read_seg(&self, seg: SegRegister) -> u64 {
         match seg {
-            SegRegister::CS => gdt().kernel_cs().to_raw(),
-            _ => gdt().kernel_ds().to_raw(),
+            SegRegister::CS => GLOBAL_GDT.kernel_cs().to_raw(),
+            _ => GLOBAL_GDT.kernel_ds().to_raw(),
         }
     }
 
@@ -348,6 +355,8 @@ impl WriteLockGuard<'static, IDT> {
             address: VirtAddr::from(self.entries.as_ptr()),
         };
 
+        // SAFETY: Inline assembly to load an IDT. `'static` lifetime ensures
+        // that address is always available for the CPU.
         unsafe {
             asm!("lidt (%rax)", in("rax") &desc, options(att_syntax));
         }
@@ -378,6 +387,8 @@ pub fn triple_fault() {
         address: VirtAddr::from(0u64),
     };
 
+    // SAFETY: This ends execution, this function will not return so memory
+    // safety is not an issue.
     unsafe {
         asm!("lidt (%rax)
               int3", in("rax") &desc, options(att_syntax));

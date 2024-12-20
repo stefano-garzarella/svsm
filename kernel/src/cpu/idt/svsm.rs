@@ -16,6 +16,7 @@ use super::common::{
     TS_VECTOR, UD_VECTOR, VC_VECTOR, XF_VECTOR,
 };
 use crate::address::VirtAddr;
+use crate::cpu::irq_state::{raw_get_tpr, raw_set_tpr, tpr_from_vector};
 use crate::cpu::registers::RFlags;
 use crate::cpu::shadow_stack::IS_CET_SUPPORTED;
 use crate::cpu::X86ExceptionContext;
@@ -100,6 +101,7 @@ pub fn idt_init() {
     // Set IST vectors
     init_ist_vectors();
 
+    // SAFETY:
     // Capture an address that can be used by assembly code to read the #HV
     // doorbell page.  The address of each CPU's doorbell page may be
     // different, but the address of the field in the PerCpu structure that
@@ -228,16 +230,22 @@ extern "C" fn ex_handler_control_protection(ctxt: &mut X86ExceptionContext, _vec
         code @ (NEAR_RET | FAR_RET_IRET) => {
             // Read the return address on the normal stack.
             let ret_ptr: GuestPtr<u64> = GuestPtr::new(VirtAddr::from(ctxt.frame.rsp));
+            // SAFETY: `rsp` is a valid guest address filled by the CPU in the
+            // X86InterruptFrame
             let ret = unsafe { ret_ptr.read() }.expect("Failed to read return address");
 
             // Read the return address on the shadow stack.
             let prev_rssp_ptr: GuestPtr<u64> = GuestPtr::new(VirtAddr::from(ctxt.ssp));
+            // SAFETY: `ssp` is a valid guest address filled by the CPU in the
+            // X86ExceptionContext
             let prev_rssp = unsafe { prev_rssp_ptr.read() }
                 .expect("Failed to read address of previous shadow stack pointer");
             // The offset to the return pointer is different for RET and IRET.
             let offset = if code == NEAR_RET { 0 } else { 8 };
             let ret_ptr: GuestPtr<u64> = GuestPtr::new(VirtAddr::from(prev_rssp + offset));
             let ret_on_ssp =
+                // SAFETY: `ssp` is a valid guest address filled by the CPU in the
+                // X86ExceptionContext
                 unsafe { ret_ptr.read() }.expect("Failed to read return address on shadow stack");
 
             panic!("thread at {rip:#018x} tried to return to {ret:#x}, but return address on shadow stack was {ret_on_ssp:#x}!");
@@ -294,10 +302,21 @@ extern "C" fn ex_handler_system_call(
     };
 
     ctxt.regs.rax = match input {
+        // Class 0 SysCalls.
         SYS_EXIT => sys_exit(ctxt.regs.rdi as u32),
+        SYS_EXEC => sys_exec(ctxt.regs.rdi, ctxt.regs.rsi, ctxt.regs.r8),
         SYS_CLOSE => sys_close(ctxt.regs.rdi as u32),
+        // Class 1 SysCalls.
+        SYS_OPEN => sys_open(ctxt.regs.rdi, ctxt.regs.rsi, ctxt.regs.r8),
+        SYS_READ => sys_read(ctxt.regs.rdi as u32, ctxt.regs.rsi, ctxt.regs.r8),
+        SYS_WRITE => sys_write(ctxt.regs.rdi as u32, ctxt.regs.rsi, ctxt.regs.r8),
+        SYS_SEEK => sys_seek(ctxt.regs.rdi as u32, ctxt.regs.rsi, ctxt.regs.r8),
+        SYS_UNLINK => sys_unlink(ctxt.regs.rdi),
+        SYS_TRUNCATE => sys_truncate(ctxt.regs.rdi as u32, ctxt.regs.rsi),
         SYS_OPENDIR => sys_opendir(ctxt.regs.rdi),
         SYS_READDIR => sys_readdir(ctxt.regs.rdi as u32, ctxt.regs.rsi, ctxt.regs.r8),
+        SYS_MKDIR => sys_mkdir(ctxt.regs.rdi),
+        SYS_RMDIR => sys_mkdir(ctxt.regs.rdi),
         _ => Err(SysCallError::EINVAL),
     }
     .map_or_else(|e| e as usize, |v| v as usize);
@@ -316,11 +335,45 @@ pub extern "C" fn ex_handler_panic(ctx: &mut X86ExceptionContext, vector: usize)
 }
 
 #[no_mangle]
-pub extern "C" fn common_isr_handler(_vector: usize) {
-    // Interrupt injection requests currently require no processing; they occur
-    // simply to ensure an exit from the guest.
+pub extern "C" fn common_isr_handler_entry(vector: usize) {
+    // Since interrupt handlers execute with interrupts disabled, it is
+    // necessary to increment the per-CPU interrupt disable nesting state
+    // while the handler is running in case common code attempts to disable
+    // interrupts temporarily.  The fact that this interrupt was received
+    // means that the previous state must have had interrupts enabled.
+    let cpu = this_cpu();
+    cpu.irqs_push_nesting(true);
 
-    // Treat any unhandled interrupt as a spurious interrupt.
+    common_isr_handler(vector);
+
+    // Decrement the interrupt disable nesting count, but do not permit
+    // interrupts to be reenabled.  They will be reenabled during the IRET
+    // flow.
+    cpu.irqs_pop_nesting();
+}
+
+pub fn common_isr_handler(vector: usize) {
+    // Set TPR based on the vector being handled and reenable interrupts to
+    // permit delivery of higher priority interrupts.  Because this routine
+    // dispatches interrupts which should only be observable if interrupts
+    // are enabled, the IRQ nesting count must be zero at this point.
+    let previous_tpr = raw_get_tpr();
+    raw_set_tpr(tpr_from_vector(vector));
+
+    let cpu = this_cpu();
+    cpu.irqs_enable();
+
+    // Treat any unhandled interrupt as a spurious interrupt.  Interrupt
+    // injection requests currently require no processing; they occur simply
+    // to ensure an exit from the guest.
+
+    // Disable interrupts before restoring TPR.
+    cpu.irqs_disable();
+    raw_set_tpr(previous_tpr);
+
+    // Perform the EOI cycle after the interrupt processing state has been
+    // restored so that recurrent interrupts will not introduce recursion at
+    // this point.
     SVSM_PLATFORM.eoi();
 }
 

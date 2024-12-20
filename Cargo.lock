@@ -899,6 +899,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "stage1"
+version = "0.1.0"
+dependencies = [
+ "bootlib",
+]
+
+[[package]]
 name = "state_machines_macros"
 version = "0.1.0"
 source = "git+https://github.com/verus-lang/verus?rev=943ba63#943ba63e0a33b668f840f8e0cb0b6e4d59759a8e"
@@ -1011,6 +1018,9 @@ dependencies = [
 [[package]]
 name = "syscall"
 version = "0.1.0"
+dependencies = [
+ "bitflags 2.6.0",
+]
 
 [[package]]
 name = "test"
@@ -1093,6 +1103,20 @@ checksum = "fc1de2c688dc15305988b563c3854064043356019f97a4b46276fe734c4f07ea"
 dependencies = [
  "crypto-common",
  "subtle",
+]
+
+[[package]]
+name = "userinit"
+version = "0.1.0"
+dependencies = [
+ "userlib",
+]
+
+[[package]]
+name = "userlib"
+version = "0.1.0"
+dependencies = [
+ "syscall",
 ]
 
 [[package]]

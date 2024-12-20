@@ -27,5 +27,15 @@
             "output_file": "bin/stage1-trampoline",
             "objcopy": "binary"
         }
+    },
+    "firmware": {
+        "env": "HV_FW_FILE"
+    },
+    "fs": {
+        "modules": {
+            "userinit": {
+                "path": "/init"
+            }
+        }
     }
 }

@@ -496,8 +496,15 @@ pub struct PageTable {
 
 impl PageTable {
     /// Load the current page table into the CR3 register.
-    pub fn load(&self) {
-        write_cr3(self.cr3_value());
+    ///
+    /// # Safety
+    /// The caller must ensure to take other actions to make sure a memory safe
+    /// execution state is warranted (e.g. changing the stack and register state)
+    pub unsafe fn load(&self) {
+        // SAFETY: demanded to the caller
+        unsafe {
+            write_cr3(self.cr3_value());
+        }
     }
 
     /// Get the CR3 register value for the current page table.
@@ -1041,6 +1048,7 @@ impl PageTable {
     /// - `vregion`: The virtual memory region to map.
     /// - `phys`: The starting physical address to map to.
     /// - `flags`: The flags to apply to the mapping.
+    /// - `shared`: Indicates whether the mapping is shared.
     ///
     /// # Returns
     /// A result indicating success or failure ([`SvsmError`]).
@@ -1049,10 +1057,16 @@ impl PageTable {
         vregion: MemoryRegion<VirtAddr>,
         phys: PhysAddr,
         flags: PTEntryFlags,
+        shared: bool,
     ) -> Result<(), SvsmError> {
         for addr in vregion.iter_pages(PageSize::Regular) {
             let offset = addr - vregion.start();
-            self.map_4k(addr, phys + offset, flags)?;
+            let phys_final = if shared {
+                make_shared_address(phys + offset)
+            } else {
+                make_private_address(phys + offset)
+            };
+            self.map_4k(addr, phys_final, flags)?;
         }
         Ok(())
     }
@@ -1073,6 +1087,7 @@ impl PageTable {
     /// - `vregion`: The virtual memory region to map.
     /// - `phys`: The starting physical address to map to.
     /// - `flags`: The flags to apply to the mapping.
+    /// - `shared`: Indicates whether the mapping is shared.
     ///
     /// # Returns
     /// A result indicating success or failure ([`SvsmError`]).
@@ -1081,10 +1096,16 @@ impl PageTable {
         vregion: MemoryRegion<VirtAddr>,
         phys: PhysAddr,
         flags: PTEntryFlags,
+        shared: bool,
     ) -> Result<(), SvsmError> {
         for addr in vregion.iter_pages(PageSize::Huge) {
             let offset = addr - vregion.start();
-            self.map_2m(addr, phys + offset, flags)?;
+            let phys_final = if shared {
+                make_shared_address(phys + offset)
+            } else {
+                make_private_address(phys + offset)
+            };
+            self.map_2m(addr, phys_final, flags)?;
         }
         Ok(())
     }

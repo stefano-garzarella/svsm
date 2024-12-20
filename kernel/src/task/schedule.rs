@@ -33,15 +33,18 @@ extern crate alloc;
 use super::INITIAL_TASK_ID;
 use super::{Task, TaskListAdapter, TaskPointer, TaskRunListAdapter};
 use crate::address::{Address, VirtAddr};
+use crate::cpu::irq_state::raw_get_tpr;
 use crate::cpu::msr::write_msr;
 use crate::cpu::percpu::{irq_nesting_count, this_cpu};
 use crate::cpu::shadow_stack::{is_cet_ss_supported, IS_CET_SUPPORTED, PL0_SSP};
-use crate::cpu::sse::sse_restore_context;
-use crate::cpu::sse::sse_save_context;
+use crate::cpu::sse::{sse_restore_context, sse_save_context};
 use crate::cpu::IrqGuard;
 use crate::error::SvsmError;
+use crate::fs::Directory;
 use crate::locking::SpinLock;
 use crate::mm::{STACK_TOTAL_SIZE, SVSM_CONTEXT_SWITCH_SHADOW_STACK, SVSM_CONTEXT_SWITCH_STACK};
+use crate::platform::SVSM_PLATFORM;
+use alloc::string::String;
 use alloc::sync::Arc;
 use core::arch::{asm, global_asm};
 use core::cell::OnceCell;
@@ -242,9 +245,9 @@ pub static TASKLIST: SpinLock<TaskList> = SpinLock::new(TaskList::new());
 /// # Returns
 ///
 /// A new instance of [`TaskPointer`] on success, [`SvsmError`] on failure.
-pub fn start_kernel_task(entry: extern "C" fn()) -> Result<TaskPointer, SvsmError> {
+pub fn start_kernel_task(entry: extern "C" fn(), name: String) -> Result<TaskPointer, SvsmError> {
     let cpu = this_cpu();
-    let task = Task::create(cpu, entry)?;
+    let task = Task::create(cpu, entry, name)?;
     TASKLIST.lock().list().push_back(task.clone());
 
     // Put task on the runqueue of this CPU
@@ -265,9 +268,13 @@ pub fn start_kernel_task(entry: extern "C" fn()) -> Result<TaskPointer, SvsmErro
 /// # Returns
 ///
 /// A new instance of [`TaskPointer`] on success, [`SvsmError`] on failure.
-pub fn create_user_task(user_entry: usize) -> Result<TaskPointer, SvsmError> {
+pub fn create_user_task(
+    user_entry: usize,
+    root: Arc<dyn Directory>,
+    name: String,
+) -> Result<TaskPointer, SvsmError> {
     let cpu = this_cpu();
-    Task::create_user(cpu, user_entry)
+    Task::create_user(cpu, user_entry, root, name)
 }
 
 /// Finished user-space task creation by putting the task on the global
@@ -359,6 +366,7 @@ pub fn schedule_init() {
 
 fn preemption_checks() {
     assert!(irq_nesting_count() == 0);
+    assert!(raw_get_tpr() == 0 || !SVSM_PLATFORM.use_interrupts());
 }
 
 /// Perform a task switch and hand the CPU over to the next task on the
@@ -383,7 +391,10 @@ pub fn schedule() {
             this_cpu().populate_page_table(&mut pt);
         }
 
-        this_cpu().set_tss_rsp0(next.stack_bounds.end());
+        // SAFETY: ths stack pointer is known to be correct.
+        unsafe {
+            this_cpu().set_tss_rsp0(next.stack_bounds.end());
+        }
         if is_cet_ss_supported() {
             write_msr(PL0_SSP, next.exception_shadow_stack.bits() as u64);
         }
