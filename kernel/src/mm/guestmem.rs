@@ -269,6 +269,10 @@ impl<T: Copy> GuestPtr<T> {
         unsafe { do_movsb(buf, self.ptr) }
     }
 
+    pub unsafe fn read_ref(&self, buf: &mut T) -> Result<(), SvsmError> {
+        unsafe { do_movsb(self.ptr, buf) }
+    }
+
     #[inline]
     pub const fn cast<N: Copy>(&self) -> GuestPtr<N> {
         GuestPtr::from_ptr(self.ptr.cast())
