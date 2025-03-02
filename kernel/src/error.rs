@@ -28,6 +28,7 @@ use crate::sev::SevSnpError;
 use crate::syscall::ObjError;
 use crate::task::TaskError;
 use crate::tdx::TdxError;
+use crate::virtio::VirtioError;
 use elf::ElfError;
 use syscall::SysCallError;
 
@@ -116,6 +117,8 @@ pub enum SvsmError {
     Attestation(AttestError),
     /// Errors related to Hyper-V.
     HyperV(u16),
+    /// Errors related to Virtio drivers.
+    Virtio(VirtioError),
 }
 
 impl From<ElfError> for SvsmError {
@@ -139,6 +142,12 @@ impl From<AttestError> for SvsmError {
 impl From<ObjError> for SvsmError {
     fn from(err: ObjError) -> Self {
         Self::Obj(err)
+    }
+}
+
+impl From<VirtioError> for SvsmError {
+    fn from(err: VirtioError) -> Self {
+        Self::Virtio(err)
     }
 }
 
