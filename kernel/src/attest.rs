@@ -18,7 +18,7 @@ use crate::{
 };
 use aes::{cipher::BlockDecrypt, Aes128};
 use aes_gcm::KeyInit;
-use alloc::{string::ToString, vec, vec::Vec};
+use alloc::{string::ToString, vec, vec::Vec, boxed::Box};
 use base64::prelude::*;
 use core::{cmp::min, fmt};
 use kbs_types::Tee;
@@ -294,7 +294,7 @@ impl AttestationDriver<'_> {
 
 /// TEE key used to decrypt secrets sent from the attestation server.
 pub enum TeeKey {
-    Ecdh384Sha256Aes128(ecdh::EphemeralSecret),
+    Ecdh384Sha256Aes128(Box<ecdh::EphemeralSecret>),
 }
 
 impl TeeKey {
@@ -304,7 +304,7 @@ impl TeeKey {
         let mut rng = ChaChaRng::from_rng(&mut rdseed).or(Err(AttestationError::TeeKeyGenerate))?;
 
         let key = match curve {
-            384 => ecdh::EphemeralSecret::random(&mut rng),
+            384 => Box::new(ecdh::EphemeralSecret::random(&mut rng)),
             _ => unreachable!(),
         };
 
