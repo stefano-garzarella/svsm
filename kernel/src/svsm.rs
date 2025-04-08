@@ -335,6 +335,14 @@ pub extern "C" fn svsm_main() {
         panic!("Failed to prepare guest FW: {e:#?}");
     }
 
+    #[cfg(feature = "attest")]
+    {
+        let mut attest_driver = svsm::attest::AttestationDriver::try_from(kbs_types::Tee::Snp).unwrap();
+        let secret = attest_driver.attest().unwrap();
+        let msg = core::str::from_utf8(&secret).unwrap();
+        log::info!("Decrypted secret from attestation server: {}", msg);
+    }
+
     #[cfg(all(feature = "vtpm", not(test)))]
     vtpm_init().expect("vTPM failed to initialize");
 
