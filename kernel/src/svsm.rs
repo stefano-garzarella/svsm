@@ -344,7 +344,26 @@ pub extern "C" fn svsm_main() {
     }
 
     // Load the encryption key
-    initialize_blk(Some([1; 64]));
+    let key = {
+        #[cfg(feature = "attest")]
+        {
+            let mut attest_driver =
+                svsm::attest::AttestationDriver::try_from(kbs_types::Tee::Snp).unwrap();
+            let secret = attest_driver.attest().expect("Remote attestation failed");
+
+            let mut xts_key = [0; 64];
+            xts_key[..64].copy_from_slice(&secret);
+
+            Some(xts_key)
+        }
+
+        #[cfg(not(feature = "attest"))]
+        {
+            None
+        }
+    };
+
+    initialize_blk(key);
 
     #[cfg(all(feature = "vtpm", not(test)))]
     vtpm_init(false).expect("vTPM failed to initialize");
