@@ -18,6 +18,7 @@ COM3_SERIAL="-serial null"  # used by hyper-v
 COM4_SERIAL="-serial null"  # used by in-SVSM tests
 QEMU_EXIT_DEVICE=""
 QEMU_TEST_IO_DEVICE=""
+QEMU_MONITOR=""
 CGS=sev
 STATE_DEVICE=""
 STATE_ENABLE=""
@@ -53,6 +54,11 @@ while [[ $# -gt 0 ]]; do
       ;;
     -p|--proxy)
       COM3_SERIAL="-serial unix:$2"
+      shift
+      shift
+      ;;
+    --monitor)
+      QEMU_MONITOR="-monitor tcp:127.0.0.1:$2,server,nowait"
       shift
       shift
       ;;
@@ -170,4 +176,5 @@ $SUDO_CMD \
     $COM4_SERIAL \
     $QEMU_EXIT_DEVICE \
     $QEMU_TEST_IO_DEVICE \
+    $QEMU_MONITOR \
     $STATE_DEVICE
