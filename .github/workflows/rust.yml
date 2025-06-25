@@ -95,40 +95,6 @@ jobs:
     name: Check unsafe blocks
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          submodules: recursive
-
-      - name: Install specified rust toolchain
-        run: rustup toolchain install --profile minimal
-
-      - name: Add rust components
-        run: rustup component add clippy
-
-      - name: Install TPM 2.0 Reference Implementation build dependencies
-        run: sudo apt install -y autoconf autoconf-archive pkg-config build-essential automake
-
-      - name: Build
-        run: make FEATURES="default,enable-gdb" STAGE1_RUSTC_ARGS="--emit=obj -C linker=/usr/bin/true" stage1_elf_full stage1_elf_trampoline
-
-      - name: Clippy with undocumented_unsafe_blocks for PR branch
-        run: |
-          cargo clippy --all-features --package svsm --target=x86_64-unknown-none --quiet -- -W clippy::undocumented_unsafe_blocks 2> clippy_warnings_pr.txt || ( cat clippy_warnings_pr.txt; exit 1 )
-
-      # Required because after the next checkout everything is removed.
-      - name: Upload PR warnings artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: clippy-warnings-pr
-          path: clippy_warnings_pr.txt
-
-      # Ensure submodules are rebuilt correctly
-      - name: Clean workspace
-        run: |
-          git clean -xdf
-          git submodule foreach git clean -xdf
-
       - name: Checkout base branch
         uses: actions/checkout@v3
         with:
@@ -138,32 +104,66 @@ jobs:
       - name: Install specified rust toolchain for the base branch
         run: rustup toolchain install --profile minimal
 
-      - name: Add rust components to the base branch toolchain
+      - name: Add rust components for the base branch
         run: rustup component add clippy
+
+      - name: Install TPM 2.0 Reference Implementation build dependencies
+        run: sudo apt install -y autoconf autoconf-archive pkg-config build-essential automake
 
       - name: Build base branch
         run: make FEATURES="default,enable-gdb" STAGE1_RUSTC_ARGS="--emit=obj -C linker=/usr/bin/true" stage1_elf_full stage1_elf_trampoline
 
       - name: Clippy with undocumented_unsafe_blocks for base branch
         run: |
-          cargo clippy --all-features --package svsm --target=x86_64-unknown-none --quiet -- -W clippy::undocumented_unsafe_blocks 2> clippy_warnings_base.txt || ( cat clippy_warnings_base.txt; exit 1 )
+          make clippy CLIPPY_OPTIONS="--quiet --color=never" UNSAFE_BLOCKS=1 2> clippy_warnings_base.txt || ( cat clippy_warnings_base.txt; exit 1 )
 
-      - name: Download PR warnings artifact
+      # Required because after the next checkout everything is removed.
+      - name: Upload base warnings artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clippy-warnings-base
+          path: clippy_warnings_base.txt
+
+      # Ensure submodules are rebuilt correctly
+      - name: Clean workspace
+        run: |
+          git clean -xdf
+          git submodule foreach git clean -xdf
+
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Install specified rust toolchain for the PR branch
+        run: rustup toolchain install --profile minimal
+
+      - name: Add rust components to the PR branch toolchain
+        run: rustup component add clippy
+
+      - name: Build PR branch
+        run: make FEATURES="default,enable-gdb" STAGE1_RUSTC_ARGS="--emit=obj -C linker=/usr/bin/true" stage1_elf_full stage1_elf_trampoline
+
+      - name: Clippy with undocumented_unsafe_blocks for PR branch
+        run: |
+          make clippy CLIPPY_OPTIONS="--quiet --color=never" UNSAFE_BLOCKS=1 2> clippy_warnings_pr.txt || ( cat clippy_warnings_pr.txt; exit 1 )
+
+      - name: Download base warnings artifact
         uses: actions/download-artifact@v4
         with:
-          name: clippy-warnings-pr
+          name: clippy-warnings-base
 
       - name: Check new undocumented unsafe blocks
         run: |
-          PR_WARNINGS=$(grep 'missing a safety comment' clippy_warnings_pr.txt | wc -l)
-          BASE_WARNINGS=$(grep 'missing a safety comment' clippy_warnings_base.txt | wc -l)
+          PR_WARNINGS=$(${GITHUB_WORKSPACE}/scripts/unsafe_blocks_report.sh -q -t -f clippy_warnings_pr.txt)
+          BASE_WARNINGS=$(${GITHUB_WORKSPACE}/scripts/unsafe_blocks_report.sh -q -t -f clippy_warnings_base.txt)
 
           echo "Undocumented unsafe code blocks [PR: $PR_WARNINGS base: $BASE_WARNINGS]"
 
           if [ "$PR_WARNINGS" -gt "$BASE_WARNINGS" ]; then
             echo "ERROR: $(($PR_WARNINGS - $BASE_WARNINGS)) new undocumented unsafe code blocks detected in this PR"
             echo "enabling the clippy::undocumented_unsafe_blocks lint in this way:"
-            echo "$ cargo clippy --all-features --package svsm --target=x86_64-unknown-none -- -W clippy::undocumented_unsafe-blocks"
+            echo "$ make clippy UNSAFE_BLOCKS=1"
             echo ""
             diff --color -u clippy_warnings_base.txt clippy_warnings_pr.txt
             exit 1
