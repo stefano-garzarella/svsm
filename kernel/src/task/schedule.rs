@@ -48,7 +48,6 @@ use crate::platform::SVSM_PLATFORM;
 use alloc::string::String;
 use alloc::sync::Arc;
 use core::arch::{asm, global_asm};
-use core::cell::OnceCell;
 use core::mem::offset_of;
 use core::ptr::null_mut;
 use intrusive_collections::LinkedList;
@@ -64,7 +63,7 @@ pub struct RunQueue {
     current_task: Option<TaskPointer>,
 
     /// Idle task - runs when there is no other runnable task
-    idle_task: OnceCell<TaskPointer>,
+    idle_task: Option<TaskPointer>,
 
     /// Temporary storage for tasks which are about to be terminated
     terminated_task: Option<TaskPointer>,
@@ -85,7 +84,7 @@ impl RunQueue {
         Self {
             run_list: LinkedList::new(TaskRunListAdapter::new()),
             current_task: None,
-            idle_task: OnceCell::new(),
+            idle_task: None,
             terminated_task: None,
             wake_from_idle: None,
             set_affinity: None,
@@ -106,7 +105,7 @@ impl RunQueue {
     fn get_next_task(&mut self) -> TaskPointer {
         self.run_list
             .pop_front()
-            .unwrap_or_else(|| self.idle_task.get().unwrap().clone())
+            .unwrap_or_else(|| self.idle_task.clone().unwrap())
     }
 
     /// Update state before a task is scheduled out. Non-idle tasks in RUNNING
@@ -182,15 +181,13 @@ impl RunQueue {
     /// # Panics
     ///
     /// Panics if the idle task was already set.
-    pub fn set_idle_task(&self, task: TaskPointer) {
+    pub fn set_idle_task(&mut self, task: TaskPointer) {
         task.set_idle_task();
 
         // Add idle task to global task list
         TASKLIST.lock().list().push_front(task.clone());
 
-        self.idle_task
-            .set(task)
-            .expect("Idle task already allocated");
+        self.idle_task.replace(task);
     }
 
     /// Gets a pointer to the current task
@@ -329,10 +326,10 @@ pub fn is_current_task(id: u32) -> bool {
 
 /// Terminates the current task.
 ///
-/// # Safety
+/// # Panic
 ///
 /// This function must only be called after scheduling is initialized, otherwise it will panic.
-pub unsafe fn current_task_terminated() {
+pub fn current_task_terminated() {
     let cpu = this_cpu();
     let mut rq = cpu.runqueue().lock_write();
     let task_node = rq
@@ -343,10 +340,7 @@ pub unsafe fn current_task_terminated() {
 }
 
 pub fn terminate() {
-    // TODO: re-evaluate whether current_task_terminated() needs to be unsafe
-    unsafe {
-        current_task_terminated();
-    }
+    current_task_terminated();
     schedule();
 }
 
