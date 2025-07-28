@@ -31,6 +31,30 @@ macro_rules! assert_eq_warn {
 pub use assert_eq_warn;
 
 static SERIAL_PORT: SpinLock<Option<SerialPort<'_>>> = SpinLock::new(None);
+static TEST_SKIPPED: SpinLock<Option<&'static str>> = SpinLock::new(None);
+
+/// Tell the runner to skip the current test.
+///
+/// The test function should return immediately after calling this function.
+/// For a convenient way to do this, see the `skip_if!` macro.
+pub fn skip(message: &'static str) {
+    *TEST_SKIPPED.lock() = Some(message);
+}
+
+/// Skips the current test if the given condition is true.
+///
+/// This is a convenience macro that calls `testing::skip()` and returns
+/// from the test function.
+#[macro_export]
+macro_rules! skip_if {
+    ($cond:expr, $msg:expr) => {
+        if $cond {
+            $crate::testing::skip($msg);
+            return;
+        }
+    };
+}
+pub use skip_if;
 
 /// Byte used to tell the host the request we need for the test.
 /// These values must be aligned with `test_io()` in scripts/test-in-svsm.sh
@@ -61,7 +85,12 @@ pub fn svsm_test_io() -> LockGuard<'static, Option<SerialPort<'static>>> {
 }
 
 pub fn svsm_test_runner(test_cases: &[&test::TestDescAndFn]) {
-    info!("running {} tests", test_cases.len());
+    let total_tests = test_cases.len();
+    info!("running {} tests", total_tests);
+    let mut passed = 0;
+    let mut ignored = 0;
+    let mut skipped = 0;
+
     for mut test_case in test_cases.iter().copied().copied() {
         if test_case.desc.should_panic == ShouldPanic::Yes {
             test_case.desc.ignore = true;
@@ -77,14 +106,27 @@ pub fn svsm_test_runner(test_cases: &[&test::TestDescAndFn]) {
             } else {
                 info!("test {} ... ignored", test_case.desc.name.0);
             }
+            ignored += 1;
             continue;
         }
 
-        info!("test {} ...", test_case.desc.name.0);
+        *TEST_SKIPPED.lock() = None;
+
         (test_case.testfn.0)();
+
+        if let Some(message) = TEST_SKIPPED.lock().take() {
+            info!("test {} ... skipped, {message}", test_case.desc.name.0);
+            skipped += 1;
+        } else {
+            info!("test {} ... ok", test_case.desc.name.0);
+            passed += 1;
+        }
     }
 
-    info!("All tests passed!");
+    info!(
+        "test result: {} passed; {} ignored; {} skipped",
+        passed, ignored, skipped
+    );
 
     exit();
 }
