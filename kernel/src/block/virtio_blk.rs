@@ -71,7 +71,8 @@ impl BlockDriver for VirtIOBlkDriver {
 #[cfg(all(test, test_in_svsm))]
 mod tests {
     use crate::{
-        address::PhysAddr, fw_cfg::FwCfg, platform::SVSM_PLATFORM, testutils::has_test_iorequests,
+        address::PhysAddr, fw_cfg::FwCfg, platform::SVSM_PLATFORM, testing::skip_if,
+        testutils::has_test_iorequests,
     };
     use core::cmp::min;
     extern crate alloc;
@@ -111,9 +112,8 @@ mod tests {
     #[test]
     #[cfg_attr(not(test_in_svsm), ignore = "Can only be run inside guest")]
     fn test_virtio_read_4sectors() {
-        if has_test_iorequests() {
-            virtio_read(4);
-        }
+        skip_if!(!has_test_iorequests(), "I/O are not supported");
+        virtio_read(4);
     }
 
     #[test]
