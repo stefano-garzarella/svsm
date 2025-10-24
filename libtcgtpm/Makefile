@@ -16,20 +16,21 @@ LIBCRT = $(LIBCRT_DIR)/libcrt.a
 LIBCRYPTO = $(OPENSSL_DIR)/libcrypto.a
 
 LIBTPM_TARGET = Tpm_CoreLib
-LIBTPM = $(TCGTPM_BUILD_DIR)/tpm/src/lib$(LIBTPM_TARGET).a
+LIBTPM = $(TCGTPM_INSTALL_DIR)/lib64/lib$(LIBTPM_TARGET).a
 
 LIBPLATFORM_TARGET = Tpm_PlatformLib
-LIBPLATFORM = $(TCGTPM_BUILD_DIR)/Platform/lib$(LIBPLATFORM_TARGET).a
+LIBPLATFORM = $(TCGTPM_INSTALL_DIR)/lib64/lib$(LIBPLATFORM_TARGET).a
 
 LIBTPMBIGNUM_TARGET = Tpm_CryptoLib_TpmBigNum
-LIBTPMBIGNUM = $(TCGTPM_BUILD_DIR)/tpm/cryptolibs/TpmBigNum/lib$(LIBTPMBIGNUM_TARGET).a
+LIBTPMBIGNUM = $(TCGTPM_INSTALL_DIR)/lib64/lib$(LIBTPMBIGNUM_TARGET).a
 
 LIBBNMATH_TARGET = Tpm_CryptoLib_Math_Ossl
-LIBBNMATH = $(TCGTPM_BUILD_DIR)/cryptolib_Ossl/lib$(LIBBNMATH_TARGET).a
+LIBBNMATH = $(TCGTPM_INSTALL_DIR)/lib64/lib$(LIBBNMATH_TARGET).a
 
 OPENSSL_MAKEFILE = $(OPENSSL_DIR)/Makefile
-TCGTPM_BUILD_DIR = $(TCGTPM_DIR)/build
-TCGTPM_MAKEFILE = $(TCGTPM_BUILD_DIR)/Makefile
+TCGTPM_CORE_BUILD_DIR = $(TCGTPM_DIR)/build/libtpm
+TCGTPM_PLATFORM_BUILD_DIR = $(TCGTPM_DIR)/build/platform
+TCGTPM_INSTALL_DIR = $(TCGTPM_DIR)/build/install
 
 LIBS = $(LIBCRT) $(LIBCRYPTO) $(LIBBNMATH) $(LIBTPMBIGNUM) $(LIBTPM) $(LIBPLATFORM)
 
@@ -152,42 +153,38 @@ $(OPENSSL_MAKEFILE):
 			-I$(LIBCRT_DIR)/include \
 			-Wl,rpath=$(LIBCRT_DIR) -lcrt)
 
-# tcgtpm
-$(LIBBNMATH): $(TCGTPM_MAKEFILE) $(LIBCRYPTO)
-	$(MAKE) -j$$(nproc) -C $(TCGTPM_BUILD_DIR) $(LIBBNMATH_TARGET)
-
-$(LIBTPMBIGNUM): $(TCGTPM_MAKEFILE) $(LIBBNMATH)
-	$(MAKE) -j$$(nproc) -C $(TCGTPM_BUILD_DIR) $(LIBTPMBIGNUM_TARGET)
-
-$(LIBTPM): $(TCGTPM_MAKEFILE) $(LIBTPMBIGNUM)
-	$(MAKE) -j$$(nproc) -C $(TCGTPM_BUILD_DIR) $(LIBTPM_TARGET)
-
-$(LIBPLATFORM): $(TCGTPM_MAKEFILE) $(LIBCRYPTO)
-	$(MAKE) -j$$(nproc) -C $(TCGTPM_BUILD_DIR) $(LIBPLATFORM_TARGET)
-
 TCGTPM_CFLAGS += -static -nostdinc -fno-stack-protector -fPIE -mno-sse -mno-red-zone
 TCGTPM_CFLAGS += -DFILE_BACKED_NV=NO
 TCGTPM_CFLAGS += -I$(LIBCRT_DIR)/include
 TCGTPM_CFLAGS += -I$(OPENSSL_DIR)/include
 
-$(TCGTPM_MAKEFILE):
-	mkdir -p $(TCGTPM_BUILD_DIR)
-	(cd $(TCGTPM_BUILD_DIR) && \
-		cmake \
-			-DCMAKE_C_FLAGS="${TCGTPM_CFLAGS}" \
-			-DOPENSSL_CRYPTO_LIBRARY="$(LIBCRYPTO)" \
-			-DOPENSSL_INCLUDE_DIR="$(OPENSSL_DIR)/include" \
-			-Duser_TpmConfiguration_Dir="$(DEPS_DIR)/TpmConfiguration" \
-			..)
+$(LIBTPMBIGNUM) $(LIBBNMATH) $(LIBTPM): $(LIBCRYPTO)
+	cmake -B $(TCGTPM_CORE_BUILD_DIR) -S $(TCGTPM_DIR)/. \
+		--install-prefix $(TCGTPM_INSTALL_DIR) \
+		-DCMAKE_C_FLAGS="${TCGTPM_CFLAGS}" \
+		-DOPENSSL_CRYPTO_LIBRARY="$(LIBCRYPTO)" \
+		-DOPENSSL_INCLUDE_DIR="$(OPENSSL_DIR)/include" \
+		-Duser_TpmConfiguration_Dir="$(DEPS_DIR)/TpmConfiguration" \
+		-DTpm_BuildOption_LibOnly=ON
+	cmake --build $(TCGTPM_CORE_BUILD_DIR) -j$$(nproc)
+	cmake --install $(TCGTPM_CORE_BUILD_DIR)
 
-clean: $(OPENSSL_MAKEFILE) $(TCGTPM_MAKEFILE)
+$(LIBPLATFORM): $(LIBCRYPTO) $(LIBTPM)
+	cmake -B $(TCGTPM_PLATFORM_BUILD_DIR) -S $(TCGTPM_DIR)/Platform \
+		--install-prefix $(TCGTPM_INSTALL_DIR) \
+		-DCMAKE_C_FLAGS="${TCGTPM_CFLAGS}"
+	cmake --build $(TCGTPM_PLATFORM_BUILD_DIR) -j$$(nproc)
+	cmake --install $(TCGTPM_PLATFORM_BUILD_DIR)
+
+clean:
 	make -C $(LIBCRT_DIR) clean
-	make -C $(OPENSSL_DIR) clean
-	make -C $(TCGTPM_BUILD_DIR) clean
+	-make -C $(OPENSSL_DIR) clean
+	-make -C $(TCGTPM_CORE_BUILD_DIR) clean
+	-make -C $(TCGTPM_PLATFORM_BUILD_DIR) clean
 	rm -f libtcgtpm.a
 
 distclean: clean
 	rm -f $(OPENSSL_MAKEFILE)
-	rm -rf $(TCGTPM_BUILD_DIR)
+	rm -rf $(TCGTPM_CORE_BUILD_DIR) $(TCGTPM_PLATFORM_BUILD_DIR) $(TCGTPM_INSTALL_DIR)
 
 .PHONY: all clean distclean
