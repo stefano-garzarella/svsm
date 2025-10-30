@@ -22,8 +22,3 @@ updates:
   # Make it also update transitive dependencies in Cargo.lock
   allow:
     - dependency-type: "all"
-  # Group all available updates into a group called "rust-dependencies"
-  groups:
-    rust-dependencies:
-      patterns:
-        - "*"
