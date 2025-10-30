@@ -12,13 +12,30 @@ updates:
     interval: weekly
     day: friday
 
-# A weekly update to rust dependencies. These will be grouped,
-# e.g. one PR will contains updates for all dependencies.
+# A weekly update to rust dependencies.
+# Using smaller groups to avoid BadObjectState errors with large grouped updates.
+# See: https://github.com/dependabot/dependabot-core/issues/10280
 - package-ecosystem: cargo
   directory: "/"
   schedule:
     interval: weekly
     day: friday
-  # Make it also update transitive dependencies in Cargo.lock
-  allow:
-    - dependency-type: "all"
+  groups:
+    # Minor and patch updates for production dependencies
+    rust-minor-patch:
+      dependency-type: "production"
+      update-types:
+        - "minor"
+        - "patch"
+
+    # Development dependencies (build, dev, test)
+    rust-dev-dependencies:
+      dependency-type: "development"
+      update-types:
+        - "minor"
+        - "patch"
+
+    # Major version updates (potentially breaking changes)
+    rust-major-updates:
+      update-types:
+        - "major"
