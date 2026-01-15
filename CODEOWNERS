@@ -5,3 +5,4 @@
 * joerg.roedel@amd.com jlange@microsoft.com peter.fang@intel.com sgarzare@redhat.com
 
 # Subsystem Maintainers
+/virtio-drivers/ osteffen@redhat.com
