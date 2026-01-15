@@ -13,6 +13,8 @@ description = "VirtIO guest drivers based on https://github.com/rcore-os/virtio-
 keywords = ["virtio"]
 categories = ["hardware-support", "no-std"]
 
+# random comment
+
 [dependencies]
 log = { workspace = true }
 bitflags = { workspace = true }
